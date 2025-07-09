@@ -155,7 +155,7 @@ class PoseEstimator {
                 const timestamp = performance.now() / 1000.0;
 
                 this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-                // 不绘制视频背景，只显示姿态估计结果
+                this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
 
                 frameCount++;
 
