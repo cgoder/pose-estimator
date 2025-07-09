@@ -296,45 +296,153 @@ class PoseEstimator {
 
     // 设置摄像头
     async _setupCamera() {
-        // 创建隐藏的video元素用于处理摄像头流
-        this.video = document.createElement('video');
-        this.video.id = 'video'; // 设置id为video
-        this.video.style.display = 'none'; // 确保不显示video画布
-        this.video.style.visibility = 'hidden'; // 额外隐藏属性
-        this.video.style.position = 'absolute'; // 绝对定位
-        this.video.style.left = '-9999px'; // 移出视窗
-        this.video.autoplay = true;
-        this.video.playsInline = true;
-        this.video.muted = true;
-        document.body.appendChild(this.video);
-        
-        // 获取摄像头流
-        this.stream = await navigator.mediaDevices.getUserMedia({ 'video': true });
-        this.video.srcObject = this.stream;
+        try {
+            // 创建隐藏的video元素用于处理摄像头流
+            this.video = document.createElement('video');
+            
+            // 验证video元素创建成功
+            if (!this.video) {
+                throw new Error('无法创建video元素');
+            }
+            
+            this.video.id = 'video'; // 设置id为video
+            this.video.style.display = 'none'; // 确保不显示video画布
+            this.video.style.visibility = 'hidden'; // 额外隐藏属性
+            this.video.style.position = 'absolute'; // 绝对定位
+            this.video.style.left = '-9999px'; // 移出视窗
+            this.video.autoplay = true;
+            this.video.playsInline = true;
+            this.video.muted = true;
+            
+            // 验证document.body存在
+            if (!document.body) {
+                throw new Error('document.body不存在，无法添加video元素');
+            }
+            
+            document.body.appendChild(this.video);
+            
+            // 再次验证video元素仍然存在
+            if (!this.video) {
+                throw new Error('video元素在添加到DOM后变为null');
+            }
+            
+            // 检查摄像头权限和可用性
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('浏览器不支持摄像头访问或运行在非HTTPS环境');
+            }
+            
+            // 获取摄像头流
+            console.log('正在请求摄像头权限...');
+            this.stream = await navigator.mediaDevices.getUserMedia({ 
+                'video': {
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    facingMode: 'user'
+                }
+            });
+            
+            // 验证流获取成功
+            if (!this.stream) {
+                throw new Error('无法获取摄像头流');
+            }
+            
+            // 最终验证video元素存在后再设置srcObject
+            if (!this.video) {
+                throw new Error('设置srcObject时video元素为null');
+            }
+            
+            this.video.srcObject = this.stream;
+            console.log('摄像头流已设置到video元素');
+            
+        } catch (error) {
+            console.error('摄像头设置失败:', error);
+            // 清理资源
+            if (this.stream) {
+                this.stream.getTracks().forEach(track => track.stop());
+                this.stream = null;
+            }
+            if (this.video && this.video.parentNode) {
+                this.video.parentNode.removeChild(this.video);
+                this.video = null;
+            }
+            throw error;
+        }
         
         // 等待视频元数据加载完成
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
+            if (!this.video) {
+                reject(new Error('video元素在等待元数据时为null'));
+                return;
+            }
+            
+            const timeout = setTimeout(() => {
+                reject(new Error('视频元数据加载超时'));
+            }, 10000); // 10秒超时
+            
             this.video.onloadedmetadata = () => {
+                clearTimeout(timeout);
                 console.log('视频元数据已加载');
                 resolve(this.video);
             };
+            
+            this.video.onerror = (error) => {
+                clearTimeout(timeout);
+                reject(new Error(`视频加载错误: ${error.message || error}`));
+            };
         });
         
+        // 验证video元素仍然存在
+        if (!this.video) {
+            throw new Error('video元素在元数据加载后为null');
+        }
+        
         // 开始播放视频
-        await this.video.play();
+        try {
+            await this.video.play();
+            console.log('视频开始播放');
+        } catch (playError) {
+            console.error('视频播放失败:', playError);
+            throw new Error(`视频播放失败: ${playError.message}`);
+        }
         
         // 等待视频真正开始播放并有数据
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
+            if (!this.video) {
+                reject(new Error('video元素在等待播放就绪时为null'));
+                return;
+            }
+            
+            let attempts = 0;
+            const maxAttempts = 100; // 最多尝试10秒
+            
             const checkVideoReady = () => {
+                attempts++;
+                
+                if (!this.video) {
+                    reject(new Error('video元素在检查过程中变为null'));
+                    return;
+                }
+                
                 if (this.video.readyState >= 2 && this.video.videoWidth > 0 && this.video.videoHeight > 0) {
                     console.log('视频已准备好播放');
                     resolve();
+                } else if (attempts >= maxAttempts) {
+                    reject(new Error(`视频准备超时，当前状态: readyState=${this.video.readyState}, width=${this.video.videoWidth}, height=${this.video.videoHeight}`));
                 } else {
                     setTimeout(checkVideoReady, 100);
                 }
             };
             checkVideoReady();
         });
+        
+        // 最终验证
+        if (!this.video) {
+            throw new Error('video元素在设置canvas尺寸时为null');
+        }
+        
+        if (!this.canvas) {
+            throw new Error('canvas元素为null');
+        }
         
         // 设置canvas尺寸与视频流一致
         this.canvas.width = this.video.videoWidth;
@@ -546,7 +654,7 @@ class PoseEstimator {
 
         // 设置文本样式
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        this.ctx.fillRect(10, 10, 220, 240);
+        this.ctx.fillRect(10, 10, 200, 300);
         
         this.ctx.fillStyle = 'white';
         this.ctx.font = '12px Arial';
@@ -604,12 +712,39 @@ class PoseEstimator {
     
     // 公共启动方法
     async start() {
-        // 设置参数控制事件监听器（确保DOM已加载）
-        this._setupParameterControls();
-        
-        await this._setupCamera();
-        await this._loadModel();
-        this._detectPoseInRealTime();
+        try {
+            // 设置参数控制事件监听器（确保DOM已加载）
+            this._setupParameterControls();
+            
+            // 检查基本环境
+            if (!this.canvas) {
+                throw new Error('Canvas元素未初始化');
+            }
+            
+            if (!this.ctx) {
+                throw new Error('Canvas上下文未初始化');
+            }
+            
+            console.log('开始设置摄像头...');
+            await this._setupCamera();
+            
+            console.log('开始加载AI模型...');
+            await this._loadModel();
+            
+            console.log('开始实时检测循环...');
+            this._detectPoseInRealTime();
+            
+            console.log('姿态估计器启动完成');
+            
+        } catch (error) {
+            console.error('姿态估计器启动失败:', error);
+            
+            // 清理已分配的资源
+            this.cleanup();
+            
+            // 重新抛出错误供上层处理
+            throw error;
+        }
     }
 }
 
@@ -636,45 +771,98 @@ function hideLoadingStatus() {
 
 // --- Main Execution ---
 async function main() {
-    const canvas = document.getElementById('canvas');
-    if (!canvas) {
-        console.error('Canvas元素未找到');
-        return;
-    }
-    
     try {
-        // 1. 初始化缓存管理器
+        // 1. 基础环境检查
+        showLoadingStatus('检查运行环境...');
+        
+        // 检查HTTPS环境
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            throw new Error('摄像头访问需要HTTPS环境或本地环境');
+        }
+        
+        // 检查浏览器兼容性
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('浏览器不支持摄像头访问API');
+        }
+        
+        if (!window.tf && !window.poseDetection) {
+            throw new Error('TensorFlow.js库未正确加载');
+        }
+        
+        // 检查Canvas元素
+        const canvas = document.getElementById('canvas');
+        if (!canvas) {
+            throw new Error('Canvas元素未找到，请检查HTML结构');
+        }
+        
+        if (!canvas.getContext) {
+            throw new Error('浏览器不支持Canvas API');
+        }
+        
+        // 2. 初始化缓存管理器
         showLoadingStatus('初始化缓存系统...');
-        await modelCacheManager.initDB();
+        try {
+            await modelCacheManager.initDB();
+        } catch (dbError) {
+            console.warn('IndexedDB初始化失败，将使用内存缓存:', dbError);
+            // 继续执行，只是没有持久化缓存
+        }
         
-        // 2. 预加载模型（后台进行）
+        // 3. 预加载模型（后台进行）
         showLoadingStatus('预加载AI模型...');
-        const preloadPromise = PoseEstimator.preloadModels();
+        const preloadPromise = PoseEstimator.preloadModels().catch(error => {
+            console.warn('模型预加载失败，将在需要时加载:', error);
+            // 不阻止主流程，模型可以在需要时加载
+        });
         
-        // 3. 创建姿态估计器实例
+        // 4. 创建姿态估计器实例
+        showLoadingStatus('初始化姿态估计器...');
         globalEstimator = new PoseEstimator(canvas);
         
-        // 4. 等待预加载完成（如果还没完成）
+        // 5. 等待预加载完成（如果还没完成）
         await preloadPromise;
         
-        // 5. 启动姿态估计器
+        // 6. 启动姿态估计器
         showLoadingStatus('启动摄像头和AI检测...');
         await globalEstimator.start();
         
         hideLoadingStatus();
-        console.log('姿态估计器启动成功');
+        console.log('🎉 姿态估计器启动成功!');
         
         // 显示缓存统计信息
         const cacheStats = {
             memoryCache: modelCacheManager.modelCache.size,
-            dbInitialized: !!modelCacheManager.db
+            dbInitialized: !!modelCacheManager.db,
+            environment: location.protocol,
+            userAgent: navigator.userAgent.substring(0, 50) + '...'
         };
-        console.log('缓存统计:', cacheStats);
+        console.log('📊 系统状态:', cacheStats);
         
     } catch (error) {
-        console.error('启动姿态估计器失败:', error);
+        console.error('❌ 启动姿态估计器失败:', error);
         hideLoadingStatus();
-        alert('启动失败，请检查摄像头权限或刷新页面重试');
+        
+        // 根据错误类型提供不同的用户提示
+        let userMessage = '启动失败，请尝试以下解决方案：\n\n';
+        
+        if (error.message.includes('HTTPS')) {
+            userMessage += '• 请使用HTTPS协议访问此页面\n• 或在本地环境(localhost)中运行';
+        } else if (error.message.includes('摄像头') || error.message.includes('getUserMedia')) {
+            userMessage += '• 请允许摄像头访问权限\n• 确保摄像头未被其他应用占用\n• 尝试刷新页面重新授权';
+        } else if (error.message.includes('TensorFlow')) {
+            userMessage += '• 网络连接问题，AI库加载失败\n• 请检查网络连接后刷新页面';
+        } else if (error.message.includes('Canvas')) {
+            userMessage += '• 浏览器不支持Canvas功能\n• 请使用现代浏览器(Chrome, Firefox, Safari, Edge)';
+        } else {
+            userMessage += '• 请刷新页面重试\n• 检查浏览器控制台获取详细错误信息\n• 确保使用现代浏览器';
+        }
+        
+        userMessage += '\n\n详细错误: ' + error.message;
+        
+        alert(userMessage);
+        
+        // 显示错误状态
+        showLoadingStatus('❌ 启动失败: ' + error.message);
     }
 }
 
