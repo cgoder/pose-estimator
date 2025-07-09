@@ -31,6 +31,27 @@
 <body>
     <h1>TF.js Pose Estimation + One Euro Filter</h1>
     
+    <!-- 加载状态显示 -->
+    <div id="loading-status" style="
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px 40px;
+        border-radius: 8px;
+        font-size: 16px;
+        z-index: 9999;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    ">
+        <div style="margin-bottom: 10px;">🤖 AI姿态估计器</div>
+        <div id="loading-message">正在初始化...</div>
+        <div style="margin-top: 15px; font-size: 12px; opacity: 0.8;">首次加载可能需要较长时间</div>
+    </div>
+    
     <!-- 参数控制面板 -->
     <div style="margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; background-color: #f9f9f9;">
         <h3 style="display: inline-block; margin-right: 15px;">One Euro Filter 参数设置</h3>
