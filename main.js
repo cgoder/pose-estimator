@@ -1,8 +1,8 @@
 class PoseEstimator {
     constructor(canvasElement) {
+        this.video = null; // 将在_setupCamera中创建
         this.canvas = canvasElement;
         this.ctx = this.canvas.getContext('2d');
-        this.video = null; // 内部创建的video元素，不显示
         this.detector = null;
         this.poseFilters = null;
         this.lastFilteredPose = null; // 用于存储上一帧的滤波结果
@@ -155,7 +155,7 @@ class PoseEstimator {
                 const timestamp = performance.now() / 1000.0;
 
                 this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-                this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+                // 不绘制视频背景，只显示姿态估计结果
 
                 frameCount++;
 
@@ -205,8 +205,8 @@ class PoseEstimator {
 
                     this._drawKeypoints(this.lastFilteredPose.keypoints);
                     this._drawSkeleton(this.lastFilteredPose.keypoints);
-                } else if (frameCount % 30 === 0) {
-                    console.log('未检测到姿态');
+                // } else if (frameCount % 30 === 0) {
+                //     console.log('未检测到姿态');
                 }
 
                 // 记录整帧处理完成时间
@@ -221,13 +221,13 @@ class PoseEstimator {
                 this._drawPerformanceInfo(poseDetectionDuration, renderingDuration, totalDuration, frameCount);
                 
                 // 每30帧输出一次耗时统计到控制台
-                if (frameCount % 30 === 0) {
-                    console.log(`=== 第${frameCount}帧耗时统计 ===`);
-                    console.log(`姿态检测耗时: ${poseDetectionDuration.toFixed(2)}ms`);
-                    console.log(`渲染绘制耗时: ${renderingDuration.toFixed(2)}ms`);
-                    console.log(`总处理耗时: ${totalDuration.toFixed(2)}ms`);
-                    console.log(`帧率: ${(1000 / totalDuration).toFixed(1)} FPS`);
-                }
+                // if (frameCount % 30 === 0) {
+                //     console.log(`=== 第${frameCount}帧耗时统计 ===`);
+                //     console.log(`姿态检测耗时: ${poseDetectionDuration.toFixed(2)}ms`);
+                //     console.log(`渲染绘制耗时: ${renderingDuration.toFixed(2)}ms`);
+                //     console.log(`总处理耗时: ${totalDuration.toFixed(2)}ms`);
+                //     console.log(`帧率: ${(1000 / totalDuration).toFixed(1)} FPS`);
+                // }
 
                 requestAnimationFrame(frame);
             } catch (error) {

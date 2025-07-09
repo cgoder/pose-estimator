@@ -57,8 +57,11 @@
                     <span style="font-size: 12px; color: #666;">Hz</span>
                 </div>
             </div>
-            <button id="applyParams" style="margin-top: 10px; padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">应用参数</button>
-            <button id="resetParams" style="margin-left: 10px; padding: 8px 16px; background-color: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">重置默认值</button>
+            <div style="margin-top: 10px;">
+                <button id="applyParams" style="padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">应用参数</button>
+                <button id="resetParams" style="margin-left: 10px; padding: 8px 16px; background-color: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">重置默认值</button>
+                <button id="forceRefresh" style="margin-left: 10px; padding: 8px 16px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;" title="清除缓存并刷新页面，获取最新代码">强制刷新</button>
+            </div>
         </div>
     </div>
     
@@ -95,6 +98,14 @@
             // 监听Service Worker控制器变化
             navigator.serviceWorker.addEventListener('controllerchange', () => {
                 window.location.reload();
+            });
+            
+            // 监听Service Worker消息
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'CACHE_CLEARED') {
+                    console.log('缓存已清除，正在刷新页面...');
+                    window.location.reload();
+                }
             });
         }
         
@@ -142,6 +153,41 @@
                 installButton.remove();
             }
         });
+        
+        // 强制刷新缓存功能
+        document.addEventListener('DOMContentLoaded', () => {
+            const forceRefreshBtn = document.getElementById('forceRefresh');
+            if (forceRefreshBtn) {
+                forceRefreshBtn.addEventListener('click', () => {
+                    if (confirm('这将清除所有缓存并刷新页面，确定要继续吗？')) {
+                        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                            // 通知Service Worker清除缓存
+                            navigator.serviceWorker.controller.postMessage({ type: 'FORCE_REFRESH' });
+                        } else {
+                            // 如果没有Service Worker，直接强制刷新
+                            window.location.reload(true);
+                        }
+                    }
+                });
+            }
+        });
+        
+        // 键盘快捷键：Ctrl+Shift+R 强制刷新
+        document.addEventListener('keydown', (event) => {
+            if (event.ctrlKey && event.shiftKey && event.key === 'R') {
+                event.preventDefault();
+                if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ type: 'FORCE_REFRESH' });
+                } else {
+                    window.location.reload(true);
+                }
+            }
+        });
+        
+        // 开发模式检测：如果URL包含localhost或127.0.0.1，显示开发提示
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            console.log('开发模式：使用 Ctrl+Shift+R 或点击"强制刷新"按钮来获取最新代码');
+        }
     </script>
 </body>
 </html>

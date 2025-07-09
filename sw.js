@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pose-estimator-v1.0.0';
+const CACHE_NAME = 'pose-estimator-v1.0.1';
 const urlsToCache = [
   '/main.html',
   '/main.js',
@@ -49,6 +49,32 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // 对于JS文件，使用网络优先策略确保获取最新版本
+  if (event.request.url.endsWith('.js') && !event.request.url.includes('cdn.jsdelivr.net')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // 如果网络请求成功，更新缓存并返回
+          if (response && response.status === 200) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME)
+              .then(cache => {
+                cache.put(event.request, responseToCache);
+              });
+            return response;
+          }
+          // 网络失败时回退到缓存
+          return caches.match(event.request);
+        })
+        .catch(() => {
+          // 网络完全失败时使用缓存
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // 对于其他资源，使用缓存优先策略
   event.respondWith(
     caches.match(event.request)
       .then(response => {
@@ -88,5 +114,17 @@ self.addEventListener('fetch', event => {
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+  
+  // 处理强制刷新缓存请求
+  if (event.data && event.data.type === 'FORCE_REFRESH') {
+    caches.delete(CACHE_NAME).then(() => {
+      console.log('Service Worker: 缓存已清除，正在重新加载...');
+      self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({ type: 'CACHE_CLEARED' });
+        });
+      });
+    });
   }
 });
