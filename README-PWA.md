@@ -1,12 +1,12 @@
 # 姿态估计器 PWA 应用
 
-基于 TensorFlow.js 和 One Euro Filter 的实时姿态估计 Progressive Web App (PWA)。
+基于 TensorFlow.js 的姿态估计 Progressive Web App (PWA)。
 
 ## 🚀 功能特性
 
 - **离线使用**: 支持离线缓存，无网络时也能使用
 - **桌面安装**: 可安装到桌面，像原生应用一样使用
-- **实时姿态检测**: 使用 TensorFlow.js 进行实时人体姿态估计
+- **姿态检测**: 使用 TensorFlow.js 进行人体姿态估计
 - **One Euro Filter**: 平滑关键点数据，减少抖动
 - **性能监控**: 实时显示 FPS 和处理时间
 - **参数调节**: 可调节滤波器参数以优化效果

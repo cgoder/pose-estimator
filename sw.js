@@ -44,8 +44,10 @@ self.addEventListener('activate', event => {
 
 // 拦截网络请求
 self.addEventListener('fetch', event => {
-  // 跳过非GET请求和chrome-extension请求
-  if (event.request.method !== 'GET' || event.request.url.startsWith('chrome-extension://')) {
+  // 跳过非GET请求、chrome-extension请求和TensorFlow Hub模型请求
+  if (event.request.method !== 'GET' || 
+      event.request.url.startsWith('chrome-extension://') ||
+      event.request.url.includes('tfhub.dev')) {
     return;
   }
 

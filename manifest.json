@@ -1,7 +1,7 @@
 {
-  "name": "姿态估计器 - One Euro Filter",
+  "name": "姿态估计器",
   "short_name": "PoseEstimator",
-  "description": "基于TensorFlow.js和One Euro Filter的实时姿态估计应用",
+  "description": "基于TensorFlow.js的姿态估计应用",
   "start_url": "/main.html",
   "display": "standalone",
   "background_color": "#ffffff",

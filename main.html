@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>姿态估计器 - One Euro Filter</title>
+    <title>姿态估计</title>
+    
+    <!-- 样式文件 -->
+    <link rel="stylesheet" href="src/styles/main.css">
     
     <!-- PWA Meta Tags -->
-    <meta name="description" content="基于TensorFlow.js和One Euro Filter的实时姿态估计应用">
+    <meta name="description" content="基于TensorFlow.js的姿态估计">
     <meta name="theme-color" content="#007bff">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="姿态估计器">
@@ -29,7 +33,7 @@
     <script src="oneEuroFilter.js"></script>
 </head>
 <body>
-    <h1>TF.js Pose Estimation + One Euro Filter</h1>
+    <h1>🤖 姿态估计 - Pose Estimator 🎯</h1>
     
     <!-- 加载状态显示 -->
     <div id="loading-status" style="
@@ -47,47 +51,19 @@
         text-align: center;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     ">
-        <div style="margin-bottom: 10px;">🤖 AI姿态估计器</div>
+        <div style="margin-bottom: 10px;">🤖 姿态估计器</div>
         <div id="loading-message">正在初始化...</div>
         <div style="margin-top: 15px; font-size: 12px; opacity: 0.8;">首次加载可能需要较长时间</div>
     </div>
     
-    <!-- 参数控制面板 -->
-    <div style="margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; background-color: #f9f9f9;">
-        <h3 style="display: inline-block; margin-right: 15px;">One Euro Filter 参数设置</h3>
-        <button id="toggleMonitoring" style="padding: 4px 8px; font-size: 12px;">隐藏监控面板</button>
-        <div id="monitoring-content">
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; max-width: 600px;">
-                <div>
-                    <label for="frequency">频率 (Frequency):</label>
-                    <input type="number" id="frequency" value="30.0" step="0.1" min="1" max="120" style="width: 100px;">
-                    <span style="font-size: 12px; color: #666;">Hz</span>
-                </div>
-                <div>
-                    <label for="minCutoff">最小截止频率 (Min Cutoff):</label>
-                    <input type="number" id="minCutoff" value="1.0" step="0.1" min="0.1" max="10" style="width: 100px;">
-                    <span style="font-size: 12px; color: #666;">Hz</span>
-                </div>
-                <div>
-                    <label for="beta">速度影响因子 (Beta):</label>
-                    <input type="number" id="beta" value="0.5" step="0.1" min="0" max="5" style="width: 100px;">
-                </div>
-                <div>
-                    <label for="dCutoff">导数截止频率 (D Cutoff):</label>
-                    <input type="number" id="dCutoff" value="1.0" step="0.1" min="0.1" max="10" style="width: 100px;">
-                    <span style="font-size: 12px; color: #666;">Hz</span>
-                </div>
-            </div>
-            <div style="margin-top: 10px;">
-                <button id="applyParams" style="padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">应用参数</button>
-                <button id="resetParams" style="margin-left: 10px; padding: 8px 16px; background-color: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">重置默认值</button>
-                <button id="forceRefresh" style="margin-left: 10px; padding: 8px 16px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;" title="清除缓存并刷新页面，获取最新代码">强制刷新</button>
-            </div>
-        </div>
+
+    
+    <div class="canvas-container">
+        <canvas id="canvas" width="640" height="480"></canvas>
     </div>
     
-    <canvas id="canvas" width="640" height="480"></canvas>
-    <script src="main.js"></script>
+    <!-- 主要脚本 - 使用ES6模块 -->
+    <script type="module" src="src/main.js"></script>
     
     <!-- PWA Service Worker Registration -->
     <script>
