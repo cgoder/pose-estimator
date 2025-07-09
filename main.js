@@ -1,8 +1,8 @@
 class PoseEstimator {
-    constructor(videoElement, canvasElement) {
-        this.video = videoElement;
+    constructor(canvasElement) {
         this.canvas = canvasElement;
         this.ctx = this.canvas.getContext('2d');
+        this.video = null; // 内部创建的video元素，不显示
         this.detector = null;
         this.poseFilters = null;
         this.lastFilteredPose = null; // 用于存储上一帧的滤波结果
@@ -111,6 +111,14 @@ class PoseEstimator {
 
     // 设置摄像头
     async _setupCamera() {
+        // 创建隐藏的video元素用于获取摄像头流
+        this.video = document.createElement('video');
+        this.video.style.display = 'none';
+        this.video.autoplay = true;
+        this.video.playsInline = true;
+        this.video.muted = true;
+        document.body.appendChild(this.video);
+        
         const stream = await navigator.mediaDevices.getUserMedia({ 'video': true });
         this.video.srcObject = stream;
         await new Promise((resolve) => {
@@ -324,9 +332,8 @@ class PoseEstimator {
 
 // --- Main Execution ---
 async function main() {
-    const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const estimator = new PoseEstimator(video, canvas);
+    const estimator = new PoseEstimator(canvas);
     await estimator.start();
 }
 
