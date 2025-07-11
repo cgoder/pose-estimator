@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简单摄像头测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .start-btn {
+            background: #4CAF50;
+            color: white;
+        }
+        .stop-btn {
+            background: #f44336;
+            color: white;
+        }
+        .canvas-container {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            background: #000;
+            text-align: center;
+        }
+        #canvas {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ccc;
+            background: #333;
+        }
+        #video {
+            display: none;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .debug-info {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>简单摄像头测试</h1>
+        <p>这是一个使用原生 getUserMedia API 的简单摄像头测试页面</p>
+        
+        <div class="controls">
+            <button id="startBtn" class="start-btn">启动摄像头</button>
+            <button id="stopBtn" class="stop-btn">停止摄像头</button>
+            <button id="clearBtn">清除日志</button>
+        </div>
+        
+        <div id="status" class="status info">准备就绪</div>
+        
+        <div class="canvas-container">
+            <canvas id="canvas" width="640" height="480"></canvas>
+            <video id="video" autoplay muted playsinline></video>
+        </div>
+        
+        <div id="debugInfo" class="debug-info"></div>
+    </div>
+
+    <script>
+        console.log('简单摄像头测试页面加载完成');
+        
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const status = document.getElementById('status');
+        const debugInfo = document.getElementById('debugInfo');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        const video = document.getElementById('video');
+        
+        let stream = null;
+        let animationId = null;
+        let frameCount = 0;
+        
+        function updateStatus(message, type = 'info') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            addDebugLog(`[${type.toUpperCase()}] ${message}`);
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        function addDebugLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `<div>[${timestamp}] ${message}</div>`;
+            debugInfo.innerHTML += logEntry;
+            debugInfo.scrollTop = debugInfo.scrollHeight;
+        }
+        
+        function renderFrame() {
+            if (!video || !context || !stream) {
+                return;
+            }
+            
+            try {
+                // 检查视频是否准备就绪
+                if (video.readyState >= HTMLVideoElement.HAVE_CURRENT_DATA &&
+                    video.videoWidth > 0 &&
+                    video.videoHeight > 0 &&
+                    !video.paused) {
+                    
+                    // 设置Canvas尺寸（只在第一次或尺寸变化时）
+                    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        addDebugLog(`Canvas尺寸更新: ${canvas.width}x${canvas.height}`);
+                    }
+                    
+                    // 清空并绘制当前帧
+                    context.clearRect(0, 0, canvas.width, canvas.height);
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    frameCount++;
+                    if (frameCount % 60 === 0) {
+                        addDebugLog(`已渲染 ${frameCount} 帧`);
+                    }
+                } else {
+                    // 绘制等待画面
+                    context.fillStyle = '#333';
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+                    context.fillStyle = '#fff';
+                    context.font = '20px Arial';
+                    context.textAlign = 'center';
+                    context.fillText('等待摄像头画面...', canvas.width / 2, canvas.height / 2);
+                }
+            } catch (error) {
+                addDebugLog(`渲染错误: ${error.message}`);
+                console.error('渲染错误:', error);
+            }
+            
+            // 继续下一帧
+            animationId = requestAnimationFrame(renderFrame);
+        }
+        
+        async function startCamera() {
+            try {
+                updateStatus('正在请求摄像头权限...', 'info');
+                
+                // 检查浏览器支持
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('浏览器不支持 getUserMedia API');
+                }
+                
+                // 请求摄像头权限
+                const constraints = {
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'
+                    },
+                    audio: false
+                };
+                
+                addDebugLog('请求摄像头权限...');
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                addDebugLog('摄像头权限获取成功');
+                
+                // 设置视频源
+                video.srcObject = stream;
+                addDebugLog('视频源已设置');
+                
+                // 等待视频准备就绪
+                updateStatus('等待视频准备就绪...', 'info');
+                await waitForVideoReady();
+                
+                updateStatus('开始渲染...', 'info');
+                frameCount = 0;
+                renderFrame();
+                
+                updateStatus('摄像头启动成功！', 'success');
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                
+            } catch (error) {
+                updateStatus(`摄像头启动失败: ${error.message}`, 'error');
+                addDebugLog(`错误详情: ${error.name} - ${error.message}`);
+                console.error('摄像头启动失败:', error);
+                
+                if (error.name === 'NotAllowedError') {
+                    addDebugLog('用户拒绝了摄像头权限请求');
+                } else if (error.name === 'NotFoundError') {
+                    addDebugLog('未找到摄像头设备');
+                } else if (error.name === 'NotReadableError') {
+                    addDebugLog('摄像头设备被其他应用占用');
+                } else if (error.name === 'OverconstrainedError') {
+                    addDebugLog('摄像头不支持指定的约束条件');
+                }
+            }
+        }
+        
+        async function stopCamera() {
+            try {
+                updateStatus('正在停止摄像头...', 'info');
+                
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                    animationId = null;
+                    addDebugLog('渲染循环已停止');
+                }
+                
+                if (stream) {
+                    stream.getTracks().forEach(track => {
+                        track.stop();
+                        addDebugLog(`停止轨道: ${track.kind}`);
+                    });
+                    stream = null;
+                }
+                
+                video.srcObject = null;
+                
+                // 清空Canvas
+                context.fillStyle = '#000';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.fillStyle = '#fff';
+                context.font = '20px Arial';
+                context.textAlign = 'center';
+                context.fillText('摄像头已停止', canvas.width / 2, canvas.height / 2);
+                
+                updateStatus('摄像头已停止', 'info');
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                
+                addDebugLog(`总共渲染了 ${frameCount} 帧`);
+                
+            } catch (error) {
+                updateStatus(`停止摄像头失败: ${error.message}`, 'error');
+                console.error('停止摄像头失败:', error);
+            }
+        }
+        
+        function waitForVideoReady() {
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('等待视频准备就绪超时'));
+                }, 10000);
+                
+                const checkReady = () => {
+                    const readyState = video.readyState;
+                    const videoWidth = video.videoWidth;
+                    const videoHeight = video.videoHeight;
+                    const paused = video.paused;
+                    
+                    addDebugLog(`视频状态: readyState=${readyState}, size=${videoWidth}x${videoHeight}, paused=${paused}`);
+                    
+                    if (readyState >= HTMLVideoElement.HAVE_CURRENT_DATA &&
+                        videoWidth > 0 &&
+                        videoHeight > 0 &&
+                        !paused) {
+                        clearTimeout(timeout);
+                        addDebugLog(`视频已准备就绪: ${videoWidth}x${videoHeight}`);
+                        resolve();
+                    } else {
+                        setTimeout(checkReady, 100);
+                    }
+                };
+                
+                // 监听视频事件
+                video.addEventListener('loadedmetadata', () => {
+                    addDebugLog('视频元数据已加载');
+                });
+                
+                video.addEventListener('canplay', () => {
+                    addDebugLog('视频可以播放');
+                });
+                
+                video.addEventListener('playing', () => {
+                    addDebugLog('视频开始播放');
+                });
+                
+                video.addEventListener('error', (e) => {
+                    addDebugLog(`视频错误: ${e.message || '未知错误'}`);
+                });
+                
+                checkReady();
+            });
+        }
+        
+        function clearDebugLog() {
+            debugInfo.innerHTML = '';
+            frameCount = 0;
+        }
+        
+        // 事件监听
+        startBtn.addEventListener('click', startCamera);
+        stopBtn.addEventListener('click', stopCamera);
+        clearBtn.addEventListener('click', clearDebugLog);
+        
+        // 初始状态
+        stopBtn.disabled = true;
+        
+        // 初始化日志
+        addDebugLog('页面加载完成，准备测试原生摄像头功能');
+        addDebugLog(`浏览器支持getUserMedia: ${!!navigator.mediaDevices?.getUserMedia}`);
+        addDebugLog(`Canvas元素: ${canvas ? '已找到' : '未找到'}`);
+        addDebugLog(`Video元素: ${video ? '已找到' : '未找到'}`);
+        
+        // 绘制初始画面
+        context.fillStyle = '#000';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = '#fff';
+        context.font = '20px Arial';
+        context.textAlign = 'center';
+        context.fillText('点击启动摄像头', canvas.width / 2, canvas.height / 2);
+    </script>
+</body>
+</html>

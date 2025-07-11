@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InputSourceManager 集成测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .danger {
+            background-color: #dc3545;
+        }
+        
+        .danger:hover {
+            background-color: #c82333;
+        }
+        
+        input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .canvas-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        canvas {
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .metric-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .metric-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #495057;
+        }
+        
+        .metric-value {
+            font-size: 18px;
+            color: #007bff;
+            margin-bottom: 5px;
+        }
+        
+        .metric-detail {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 2px 0;
+        }
+        
+        .log-entry.error {
+            color: #dc3545;
+        }
+        
+        .log-entry.warn {
+            color: #ffc107;
+        }
+        
+        .log-entry.info {
+            color: #17a2b8;
+        }
+        
+        .log-entry.debug {
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>InputSourceManager 集成测试</h1>
+        <p>测试 InputSourceManager 的各项功能，包括摄像头、图片、视频输入以及性能监控和错误处理。</p>
+    </div>
+
+    <div class="container">
+        <h2>输入源控制</h2>
+        <div class="controls">
+            <div class="control-group">
+                <label>摄像头控制</label>
+                <button id="startCamera">启动摄像头</button>
+                <button id="stopCamera" disabled>停止摄像头</button>
+            </div>
+            
+            <div class="control-group">
+                <label>图片输入</label>
+                <input type="file" id="imageInput" accept="image/*">
+                <button id="loadImage" disabled>加载图片</button>
+            </div>
+            
+            <div class="control-group">
+                <label>视频输入</label>
+                <input type="file" id="videoInput" accept="video/*">
+                <button id="loadVideo" disabled>加载视频</button>
+            </div>
+            
+            <div class="control-group">
+                <label>系统控制</label>
+                <button id="resetMetrics">重置指标</button>
+                <button id="stopAll" class="danger">停止所有</button>
+            </div>
+        </div>
+        
+        <div id="status" class="status info">准备就绪</div>
+    </div>
+
+    <div class="container">
+        <h2>画布显示</h2>
+        <div class="canvas-container">
+            <canvas id="canvas" width="640" height="480"></canvas>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>性能指标</h2>
+        <div class="metrics" id="metrics">
+            <!-- 性能指标将在这里动态显示 -->
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>日志输出</h2>
+        <div class="log" id="log">
+            <!-- 日志将在这里显示 -->
+        </div>
+    </div>
+
+    <script type="module">
+        import { InputSourceManager } from '../../src/components/InputSourceManager.js';
+        import { eventBus } from '../../src/utils/EventBus.js';
+        import { logger } from '../../src/utils/Logger.js';
+
+        // 获取DOM元素
+        const canvas = document.getElementById('canvas');
+        const status = document.getElementById('status');
+        const log = document.getElementById('log');
+        const metrics = document.getElementById('metrics');
+        
+        const startCameraBtn = document.getElementById('startCamera');
+        const stopCameraBtn = document.getElementById('stopCamera');
+        const imageInput = document.getElementById('imageInput');
+        const loadImageBtn = document.getElementById('loadImage');
+        const videoInput = document.getElementById('videoInput');
+        const loadVideoBtn = document.getElementById('loadVideo');
+        const resetMetricsBtn = document.getElementById('resetMetrics');
+        const stopAllBtn = document.getElementById('stopAll');
+
+        // 初始化 InputSourceManager
+        let inputManager;
+        
+        try {
+            inputManager = new InputSourceManager(canvas, (frame) => {
+                // 帧更新回调
+                updateMetrics();
+            });
+            
+            updateStatus('InputSourceManager 初始化成功', 'success');
+        } catch (error) {
+            updateStatus(`初始化失败: ${error.message}`, 'error');
+            addLog(`ERROR: 初始化失败 - ${error.message}`, 'error');
+        }
+
+        // 状态更新函数
+        function updateStatus(message, type = 'info') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        // 日志添加函数
+        function addLog(message, level = 'info') {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${level}`;
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(logEntry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // 指标更新函数
+        function updateMetrics() {
+            if (!inputManager) return;
+            
+            try {
+                const performanceMetrics = inputManager.getPerformanceMetrics();
+                
+                metrics.innerHTML = `
+                    <div class="metric-card">
+                        <div class="metric-title">帧数统计</div>
+                        <div class="metric-value">${performanceMetrics.frameCount || 0}</div>
+                        <div class="metric-detail">总渲染帧数</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">平均帧时间</div>
+                        <div class="metric-value">${(performanceMetrics.averageFrameTime || 0).toFixed(2)}ms</div>
+                        <div class="metric-detail">每帧平均处理时间</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">渲染时间</div>
+                        <div class="metric-value">${(performanceMetrics.renderTime || 0).toFixed(2)}ms</div>
+                        <div class="metric-detail">最近一帧渲染时间</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">错误计数</div>
+                        <div class="metric-value">${performanceMetrics.errorCount || 0}</div>
+                        <div class="metric-detail">累计错误次数</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">输入源类型</div>
+                        <div class="metric-value">${inputManager.sourceType || '无'}</div>
+                        <div class="metric-detail">当前活动的输入源</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">活动状态</div>
+                        <div class="metric-value">${inputManager.isActive ? '活动' : '非活动'}</div>
+                        <div class="metric-detail">输入源管理器状态</div>
+                    </div>
+                `;
+            } catch (error) {
+                addLog(`指标更新失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 事件监听器
+        startCameraBtn.addEventListener('click', async () => {
+            try {
+                updateStatus('正在启动摄像头...', 'info');
+                await inputManager.startCamera();
+                updateStatus('摄像头启动成功', 'success');
+                startCameraBtn.disabled = true;
+                stopCameraBtn.disabled = false;
+                addLog('摄像头启动成功', 'info');
+            } catch (error) {
+                updateStatus(`摄像头启动失败: ${error.message}`, 'error');
+                addLog(`ERROR: 摄像头启动失败 - ${error.message}`, 'error');
+            }
+        });
+
+        stopCameraBtn.addEventListener('click', async () => {
+            try {
+                await inputManager.stop();
+                updateStatus('摄像头已停止', 'success');
+                startCameraBtn.disabled = false;
+                stopCameraBtn.disabled = true;
+                addLog('摄像头已停止', 'info');
+            } catch (error) {
+                updateStatus(`停止失败: ${error.message}`, 'error');
+                addLog(`ERROR: 停止失败 - ${error.message}`, 'error');
+            }
+        });
+
+        imageInput.addEventListener('change', (e) => {
+            loadImageBtn.disabled = !e.target.files.length;
+        });
+
+        loadImageBtn.addEventListener('click', async () => {
+            const file = imageInput.files[0];
+            if (!file) return;
+            
+            try {
+                updateStatus('正在加载图片...', 'info');
+                await inputManager.startImage(file);
+                updateStatus('图片加载成功', 'success');
+                addLog(`图片加载成功: ${file.name}`, 'info');
+            } catch (error) {
+                updateStatus(`图片加载失败: ${error.message}`, 'error');
+                addLog(`ERROR: 图片加载失败 - ${error.message}`, 'error');
+            }
+        });
+
+        videoInput.addEventListener('change', (e) => {
+            loadVideoBtn.disabled = !e.target.files.length;
+        });
+
+        loadVideoBtn.addEventListener('click', async () => {
+            const file = videoInput.files[0];
+            if (!file) return;
+            
+            try {
+                updateStatus('正在加载视频...', 'info');
+                await inputManager.startVideo(file);
+                updateStatus('视频加载成功', 'success');
+                addLog(`视频加载成功: ${file.name}`, 'info');
+            } catch (error) {
+                updateStatus(`视频加载失败: ${error.message}`, 'error');
+                addLog(`ERROR: 视频加载失败 - ${error.message}`, 'error');
+            }
+        });
+
+        resetMetricsBtn.addEventListener('click', () => {
+            try {
+                inputManager.resetPerformanceMetrics();
+                updateMetrics();
+                updateStatus('性能指标已重置', 'success');
+                addLog('性能指标已重置', 'info');
+            } catch (error) {
+                updateStatus(`重置失败: ${error.message}`, 'error');
+                addLog(`ERROR: 重置失败 - ${error.message}`, 'error');
+            }
+        });
+
+        stopAllBtn.addEventListener('click', async () => {
+            try {
+                await inputManager.stop();
+                updateStatus('所有输入源已停止', 'success');
+                startCameraBtn.disabled = false;
+                stopCameraBtn.disabled = true;
+                addLog('所有输入源已停止', 'info');
+            } catch (error) {
+                updateStatus(`停止失败: ${error.message}`, 'error');
+                addLog(`ERROR: 停止失败 - ${error.message}`, 'error');
+            }
+        });
+
+        // 监听事件总线事件
+        eventBus.on('input:camera:ready', () => {
+            addLog('事件: 摄像头准备就绪', 'info');
+        });
+
+        eventBus.on('input:camera:error', (error) => {
+            addLog(`事件: 摄像头错误 - ${error.message}`, 'error');
+        });
+
+        eventBus.on('input:image:ready', () => {
+            addLog('事件: 图片准备就绪', 'info');
+        });
+
+        eventBus.on('input:image:error', (error) => {
+            addLog(`事件: 图片错误 - ${error.message}`, 'error');
+        });
+
+        eventBus.on('input:video:ready', () => {
+            addLog('事件: 视频准备就绪', 'info');
+        });
+
+        eventBus.on('input:video:error', (error) => {
+            addLog(`事件: 视频错误 - ${error.message}`, 'error');
+        });
+
+        // 定期更新指标
+        setInterval(updateMetrics, 1000);
+        
+        // 初始化指标显示
+        updateMetrics();
+        
+        // 页面卸载时清理资源
+        window.addEventListener('beforeunload', () => {
+            if (inputManager) {
+                inputManager.destroy();
+            }
+        });
+
+        addLog('测试页面初始化完成', 'info');
+    </script>
+</body>
+</html>

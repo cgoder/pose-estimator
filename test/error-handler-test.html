@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ErrorHandler 测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #output {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ErrorHandler 功能测试</h1>
+        
+        <div class="test-section">
+            <h3>导入测试</h3>
+            <p>测试 ErrorHandler 和 InputSourceManager 是否能正常导入和初始化</p>
+            <button onclick="testImports()">测试导入</button>
+            <div id="import-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>ErrorHandler 方法测试</h3>
+            <p>测试 ErrorHandler 的各种方法</p>
+            <button onclick="testErrorHandlerMethods()">测试方法</button>
+            <div id="methods-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>错误处理测试</h3>
+            <p>测试错误处理和统计功能</p>
+            <button onclick="testErrorHandling()">测试错误处理</button>
+            <div id="error-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>输出日志</h3>
+            <div id="output"></div>
+            <button onclick="clearOutput()">清空日志</button>
+        </div>
+    </div>
+
+    <script type="module">
+        let errorHandler, InputSourceError, inputSourceManager;
+        
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${message}\n`;
+            output.textContent += logEntry;
+            output.scrollTop = output.scrollHeight;
+            console.log(logEntry);
+        }
+        
+        function setResult(elementId, message, isSuccess) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = isSuccess ? 'success' : 'error';
+        }
+        
+        window.testImports = async function() {
+            try {
+                log('开始导入测试...');
+                
+                // 导入 ErrorHandler
+                const errorModule = await import('../src/utils/ErrorHandler.js');
+                errorHandler = errorModule.errorHandler;
+                InputSourceError = errorModule.InputSourceError;
+                log('ErrorHandler 导入成功');
+                
+                // 导入 InputSourceManager
+                const inputModule = await import('../src/components/InputSourceManager.js');
+                inputSourceManager = inputModule.inputSourceManager;
+                log('InputSourceManager 导入成功');
+                
+                setResult('import-result', '✅ 所有模块导入成功', true);
+                log('导入测试完成');
+                
+            } catch (error) {
+                const errorMsg = `❌ 导入失败: ${error.message}`;
+                setResult('import-result', errorMsg, false);
+                log(`导入错误: ${error.message}`, 'error');
+                console.error('导入错误详情:', error);
+            }
+        };
+        
+        window.testErrorHandlerMethods = function() {
+            try {
+                if (!errorHandler) {
+                    throw new Error('请先运行导入测试');
+                }
+                
+                log('开始 ErrorHandler 方法测试...');
+                
+                // 测试 setContext
+                errorHandler.setContext('TestContext');
+                const context = errorHandler.getContext();
+                log(`setContext/getContext 测试: ${context}`);
+                
+                // 测试 reset
+                errorHandler.reset();
+                log('reset 方法测试完成');
+                
+                // 测试 getErrorStats
+                const stats = errorHandler.getErrorStats();
+                log(`getErrorStats 测试: ${JSON.stringify(stats, null, 2)}`);
+                
+                setResult('methods-result', '✅ 所有方法测试通过', true);
+                log('ErrorHandler 方法测试完成');
+                
+            } catch (error) {
+                const errorMsg = `❌ 方法测试失败: ${error.message}`;
+                setResult('methods-result', errorMsg, false);
+                log(`方法测试错误: ${error.message}`, 'error');
+            }
+        };
+        
+        window.testErrorHandling = function() {
+            try {
+                if (!errorHandler || !InputSourceError) {
+                    throw new Error('请先运行导入测试');
+                }
+                
+                log('开始错误处理测试...');
+                
+                // 创建测试错误
+                const testError = new Error('这是一个测试错误');
+                const processedError = errorHandler.handleError(testError, {
+                    testContext: 'error handling test'
+                });
+                
+                log(`处理的错误类型: ${processedError.constructor.name}`);
+                log(`错误代码: ${processedError.code}`);
+                log(`错误消息: ${processedError.message}`);
+                log(`错误上下文: ${JSON.stringify(processedError.context, null, 2)}`);
+                
+                // 创建 InputSourceError
+                const inputError = new InputSourceError(
+                    'TEST_ERROR',
+                    '这是一个测试 InputSourceError',
+                    null,
+                    { source: 'test' }
+                );
+                
+                const processedInputError = errorHandler.handleError(inputError);
+                log(`InputSourceError 处理完成: ${processedInputError.code}`);
+                
+                // 获取错误统计
+                const finalStats = errorHandler.getErrorStats();
+                log(`最终错误统计: ${JSON.stringify(finalStats, null, 2)}`);
+                
+                setResult('error-result', '✅ 错误处理测试通过', true);
+                log('错误处理测试完成');
+                
+            } catch (error) {
+                const errorMsg = `❌ 错误处理测试失败: ${error.message}`;
+                setResult('error-result', errorMsg, false);
+                log(`错误处理测试错误: ${error.message}`, 'error');
+            }
+        };
+        
+        window.clearOutput = function() {
+            document.getElementById('output').textContent = '';
+        };
+        
+        // 页面加载完成后自动运行导入测试
+        window.addEventListener('load', () => {
+            log('页面加载完成，准备开始测试...');
+        });
+    </script>
+</body>
+</html>

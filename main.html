@@ -1,21 +1,292 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>姿态估计</title>
+    <title>姿态估计器 - AI Pose Estimation</title>
     
     <!-- 样式文件 -->
     <link rel="stylesheet" href="src/styles/main.css">
     
+    <style>
+        /* 全局样式重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* 应用头部样式 */
+        .app-header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .app-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .app-icon {
+            font-size: 2rem;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+        }
+        
+        .title-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            font-size: 0.8rem;
+            color: #718096;
+            font-weight: 400;
+            opacity: 0.8;
+        }
+        
+        .app-version {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+        
+        /* 加载动画 */
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* 主应用容器 */
+        .app-main {
+            padding: 30px;
+            min-height: calc(100vh - 80px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        /* 画布容器样式 */
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            background: white;
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+        }
+        
+        canvas {
+            display: block;
+            border-radius: 13px;
+        }
+        
+        .canvas-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .fps-counter {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00ff88;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .model-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00d4ff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        /* UI容器样式 */
+        .ui-container {
+            width: 100%;
+            max-width: 800px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        /* 错误容器样式 */
+        .error-container {
+            width: 100%;
+            max-width: 600px;
+        }
+        
+        .error-message {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin: 10px 0;
+            box-shadow: 0 4px 20px rgba(255, 107, 107, 0.3);
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        /* 状态栏样式 */
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            color: #4a5568;
+            z-index: 1000;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .app-header {
+                padding: 10px 20px;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .app-title {
+                font-size: 1.3rem;
+                flex-direction: column;
+                gap: 5px;
+                text-align: center;
+            }
+            
+            .app-main {
+                padding: 20px 15px;
+            }
+            
+            .canvas-container {
+                max-width: 100%;
+                overflow: hidden;
+            }
+            
+            canvas {
+                max-width: 100%;
+                height: auto;
+            }
+            
+            .ui-container {
+                padding: 15px;
+            }
+        }
+        
+        /* 可访问性增强 */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+        
+        /* 深色模式支持 */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            }
+            
+            .app-header {
+                background: rgba(26, 32, 44, 0.95);
+                border-bottom-color: rgba(255, 255, 255, 0.1);
+            }
+            
+            .app-title {
+                color: #e2e8f0;
+            }
+            
+            .subtitle {
+                color: #a0aec0;
+            }
+            
+            .ui-container {
+                background: rgba(26, 32, 44, 0.9);
+                border-color: rgba(255, 255, 255, 0.1);
+            }
+            
+            .status-bar {
+                background: rgba(26, 32, 44, 0.95);
+                border-top-color: rgba(255, 255, 255, 0.1);
+                color: #a0aec0;
+            }
+        }
+    </style>
+    
     <!-- PWA Meta Tags -->
-    <meta name="description" content="基于TensorFlow.js的姿态估计">
+    <meta name="description" content="基于TensorFlow.js的实时姿态估计应用，支持MoveNet和PoseNet模型">
+    <meta name="keywords" content="姿态估计,TensorFlow.js,AI,机器学习,实时检测,MoveNet,PoseNet">
+    <meta name="author" content="Pose Estimator Team">
     <meta name="theme-color" content="#007bff">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="姿态估计器">
     <meta name="msapplication-TileColor" content="#007bff">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="姿态估计器 - AI Pose Estimation">
+    <meta property="og:description" content="基于TensorFlow.js的实时姿态估计应用">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="icon-512.svg">
     
     <!-- Manifest -->
     <link rel="manifest" href="manifest.json">
@@ -25,42 +296,296 @@
     <link rel="apple-touch-icon" href="icon-192.svg">
     <link rel="shortcut icon" href="icon-192.svg">
     
-    <!-- TensorFlow.js Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
-    <script src="oneEuroFilter.js"></script>
+    <!-- 预加载关键资源 -->
+    <link rel="preload" href="src/main.js" as="script" crossorigin>
+    <link rel="preload" href="src/styles/main.css" as="style">
+    
+    <!-- DNS预解析优化 -->
+    <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
+    <link rel="dns-prefetch" href="//tfhub.dev">
+    
+    <!-- 
+        TensorFlow.js 模块化加载策略:
+        新架构使用ES6模块和动态导入来管理TensorFlow.js依赖
+        - 核心模块: @tensorflow/tfjs (通过TensorFlowProvider动态导入)
+        - 后端模块: @tensorflow/tfjs-backend-webgl (按需加载)
+        - 模型模块: @tensorflow-models/pose-detection (按需加载)
+        - 优势: 更好的缓存控制、按需加载、版本管理、错误处理
+    -->
+    
+    <!-- 应用初始化脚本 -->
+    <script>
+        // 全局配置
+        window.APP_CONFIG = {
+            version: '2.0.0',
+            environment: window.location.hostname === 'localhost' ? 'development' : 'production',
+            features: {
+                pwa: true,
+                serviceWorker: true,
+                memoryMonitoring: true,
+                performanceTracking: true,
+                progressiveLoading: true
+            },
+            ai: {
+                defaultModel: 'MoveNet',
+                enableOptimization: true,
+                memoryLimit: 512,
+                backend: 'webgl',
+                preloadModels: ['MoveNet']
+            },
+            ui: {
+                theme: 'auto', // 'light', 'dark', 'auto'
+                animations: true,
+                accessibility: true
+            }
+        };
+        
+        // 性能监控点
+        window.PERFORMANCE_MARKS = {
+            APP_START: 'app-start',
+            DOM_READY: 'dom-ready',
+            TENSORFLOW_LOAD_START: 'tf-load-start',
+            TENSORFLOW_LOAD_END: 'tf-load-end',
+            MODEL_LOAD_START: 'model-load-start',
+            MODEL_LOAD_END: 'model-load-end',
+            CAMERA_INIT_START: 'camera-init-start',
+            CAMERA_INIT_END: 'camera-init-end',
+            FIRST_DETECTION: 'first-detection',
+            APP_READY: 'app-ready'
+        };
+        
+        // 加载进度管理器
+        window.LoadingManager = {
+            progress: 0,
+            stages: {
+                'init': { weight: 10, message: '正在初始化应用...', detail: '准备加载AI模型' },
+                'tensorflow': { weight: 30, message: '正在加载TensorFlow.js...', detail: '下载AI计算引擎' },
+                'models': { weight: 40, message: '正在加载AI模型...', detail: '准备姿态检测模型' },
+                'camera': { weight: 15, message: '正在初始化摄像头...', detail: '获取摄像头权限' },
+                'ready': { weight: 5, message: '准备就绪', detail: '启动姿态检测' }
+            },
+            currentStage: 'init',
+            
+            updateProgress(stage, progress = null) {
+                if (this.stages[stage]) {
+                    this.currentStage = stage;
+                    const stageConfig = this.stages[stage];
+                    
+                    // 计算总进度
+                    let totalProgress = 0;
+                    const stageKeys = Object.keys(this.stages);
+                    const currentIndex = stageKeys.indexOf(stage);
+                    
+                    // 累加已完成阶段的权重
+                    for (let i = 0; i < currentIndex; i++) {
+                        totalProgress += this.stages[stageKeys[i]].weight;
+                    }
+                    
+                    // 添加当前阶段的进度
+                    if (progress !== null) {
+                        totalProgress += (stageConfig.weight * progress / 100);
+                    }
+                    
+                    this.progress = Math.min(100, totalProgress);
+                    
+                    // 更新UI
+                    this.updateUI(stageConfig.message, stageConfig.detail);
+                }
+            },
+            
+            updateUI(message, detail) {
+                const progressFill = document.getElementById('progress-fill');
+                const loadingPercentage = document.getElementById('loading-percentage');
+                const loadingMessage = document.getElementById('loading-message');
+                const loadingDetail = document.getElementById('loading-detail');
+                
+                if (progressFill) progressFill.style.width = `${this.progress}%`;
+                if (loadingPercentage) loadingPercentage.textContent = `${Math.round(this.progress)}%`;
+                if (loadingMessage) loadingMessage.textContent = message;
+                if (loadingDetail) loadingDetail.textContent = detail;
+            },
+            
+            complete() {
+                this.progress = 100;
+                this.updateUI('启动完成', '正在进入应用...');
+                
+                setTimeout(() => {
+                    const appLoading = document.getElementById('app-loading');
+                    const appMain = document.getElementById('app-main');
+                    
+                    if (appLoading) {
+                        appLoading.style.opacity = '0';
+                        appLoading.style.transition = 'opacity 0.5s ease-out';
+                        setTimeout(() => {
+                            appLoading.style.display = 'none';
+                        }, 500);
+                    }
+                    
+                    if (appMain) {
+                        appMain.style.display = 'flex';
+                        appMain.style.opacity = '0';
+                        setTimeout(() => {
+                            appMain.style.opacity = '1';
+                            appMain.style.transition = 'opacity 0.5s ease-in';
+                        }, 100);
+                    }
+                    
+                    performance.mark(window.PERFORMANCE_MARKS.APP_READY);
+                }, 500);
+            }
+        };
+        
+        // 标记应用启动
+        performance.mark(window.PERFORMANCE_MARKS.APP_START);
+        window.LoadingManager.updateProgress('init', 0);
+        
+        // DOM就绪处理
+        document.addEventListener('DOMContentLoaded', () => {
+            performance.mark(window.PERFORMANCE_MARKS.DOM_READY);
+            window.LoadingManager.updateProgress('init', 100);
+            
+            // 更新版本信息
+            const versionElement = document.getElementById('app-version');
+            if (versionElement) {
+                versionElement.textContent = `v${window.APP_CONFIG.version}`;
+            }
+        });
+        
+        // 全局错误处理
+        window.addEventListener('error', (event) => {
+            console.error('全局错误:', event.error);
+            
+            // 显示错误信息
+            const errorContainer = document.getElementById('error-container');
+            if (errorContainer) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.innerHTML = `
+                    <strong>应用错误:</strong> ${event.error?.message || '未知错误'}<br>
+                    <small>请刷新页面重试</small>
+                `;
+                errorContainer.appendChild(errorDiv);
+            }
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('未处理的Promise拒绝:', event.reason);
+            
+            // 显示Promise错误
+            const errorContainer = document.getElementById('error-container');
+            if (errorContainer) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.innerHTML = `
+                    <strong>异步操作错误:</strong> ${event.reason?.message || '未知异步错误'}<br>
+                    <small>某些功能可能无法正常工作</small>
+                `;
+                errorContainer.appendChild(errorDiv);
+            }
+        });
+        
+        // 内存监控（开发环境）
+        if (window.APP_CONFIG.environment === 'development' && window.APP_CONFIG.features.memoryMonitoring) {
+            setInterval(() => {
+                if (performance.memory) {
+                    const memory = performance.memory;
+                    console.log('Memory Usage:', {
+                        used: Math.round(memory.usedJSHeapSize / 1024 / 1024) + 'MB',
+                        total: Math.round(memory.totalJSHeapSize / 1024 / 1024) + 'MB',
+                        limit: Math.round(memory.jsHeapSizeLimit / 1024 / 1024) + 'MB'
+                    });
+                }
+            }, 30000); // 每30秒检查一次
+        }
+    </script>
 </head>
 <body>
-    <h1>🤖 姿态估计 - Pose Estimator 🎯</h1>
+    <!-- 应用头部 -->
+    <header class="app-header">
+        <h1 class="app-title">
+            <span class="app-icon">🤖</span>
+            <span class="title-text">姿态估计器</span>
+            <span class="subtitle">AI Pose Estimation</span>
+        </h1>
+        <div class="app-version" id="app-version">v2.0.0</div>
+    </header>
     
-    <!-- 加载状态显示 -->
-    <div id="loading-status" style="
-        display: none;
+    <!-- 应用初始化加载状态 -->
+    <div id="app-loading" class="app-loading" style="
         position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.8);
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
         color: white;
-        padding: 20px 40px;
-        border-radius: 8px;
-        font-size: 16px;
-        z-index: 9999;
-        text-align: center;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     ">
-        <div style="margin-bottom: 10px;">🤖 姿态估计器</div>
-        <div id="loading-message">正在初始化...</div>
-        <div style="margin-top: 15px; font-size: 12px; opacity: 0.8;">首次加载可能需要较长时间</div>
+        <div class="loading-content" style="text-align: center; max-width: 400px; padding: 20px;">
+            <div class="loading-logo" style="font-size: 4rem; margin-bottom: 20px; animation: pulse 2s infinite;">🤖</div>
+            <h2 style="margin: 0 0 10px 0; font-size: 1.8rem; font-weight: 300;">姿态估计器</h2>
+            <p style="margin: 0 0 30px 0; opacity: 0.9; font-size: 1rem;">基于TensorFlow.js的实时AI姿态检测</p>
+            
+            <div class="loading-progress" style="margin-bottom: 20px;">
+                <div class="progress-bar" style="
+                    width: 100%;
+                    height: 4px;
+                    background: rgba(255,255,255,0.2);
+                    border-radius: 2px;
+                    overflow: hidden;
+                ">
+                    <div id="progress-fill" style="
+                        width: 0%;
+                        height: 100%;
+                        background: linear-gradient(90deg, #00d4ff, #00ff88);
+                        border-radius: 2px;
+                        transition: width 0.3s ease;
+                    "></div>
+                </div>
+                <div id="loading-percentage" style="margin-top: 10px; font-size: 0.9rem; opacity: 0.8;">0%</div>
+            </div>
+            
+            <div id="loading-message" style="font-size: 0.9rem; opacity: 0.8; min-height: 20px;">正在初始化应用...</div>
+            <div id="loading-detail" style="font-size: 0.8rem; opacity: 0.6; margin-top: 10px; min-height: 16px;">准备加载AI模型</div>
+        </div>
+        
+        <div class="loading-tips" style="
+            position: absolute;
+            bottom: 40px;
+            text-align: center;
+            font-size: 0.8rem;
+            opacity: 0.7;
+            max-width: 300px;
+        ">
+            💡 首次加载需要下载AI模型，请耐心等待
+        </div>
     </div>
     
-
-    
-    <div class="canvas-container">
-        <canvas id="canvas" width="640" height="480"></canvas>
-    </div>
+    <!-- 主应用容器 -->
+    <main id="app-main" class="app-main" style="display: none;">
+        <!-- 画布容器 -->
+        <div class="canvas-container">
+            <canvas id="canvas" width="640" height="480" aria-label="姿态估计画布"></canvas>
+            <div class="canvas-overlay">
+                <div id="fps-counter" class="fps-counter" style="display: none;"></div>
+                <div id="model-info" class="model-info" style="display: none;"></div>
+            </div>
+        </div>
+        
+        <!-- UI控制面板容器 -->
+        <div id="ui-container" class="ui-container"></div>
+        
+        <!-- 错误显示容器 -->
+        <div id="error-container" class="error-container"></div>
+        
+        <!-- 状态栏 -->
+        <div id="status-bar" class="status-bar"></div>
+    </main>
     
     <!-- 主要脚本 - 使用ES6模块 -->
     <script type="module" src="src/main.js"></script>

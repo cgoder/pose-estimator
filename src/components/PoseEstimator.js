@@ -1,24 +1,34 @@
 import { CONFIG, POSE_CONNECTIONS, KEYPOINT_NAMES } from '../utils/constants.js';
 import { ErrorHandler, EnvironmentChecker } from '../utils/errorHandling.js';
 import { performanceMonitor, PerformanceOptimizer } from '../utils/performance.js';
-import { modelCacheManager } from './ModelCacheManager.js';
-import { OneEuroFilterManager } from './OneEuroFilterManager.js';
+import { TensorFlowProvider, MODEL_TYPES } from '../ai/models/TensorFlowProvider.js';
+import { OneEuroFilterManager } from '../ai/filters/OneEuroFilterManager.js';
+import { eventBus, EVENTS } from '../utils/EventBus.js';
+import { IPoseEstimator } from '../interfaces/components/IPoseEstimator.js';
+// OneEuroFilter 现在通过 OneEuroFilterManager 管理
 
 /**
  * 姿态估计器主类
  * 负责摄像头管理、模型加载、姿态检测和渲染
  */
-export class PoseEstimator {
-    constructor(canvas, options = {}) {
+export class PoseEstimator extends IPoseEstimator {
+    constructor(canvas, options = {}, inputSourceManager = null) {
+        super();
+        
         // 验证环境
         EnvironmentChecker.checkCanvas(canvas);
         
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
-        this.video = null;
         this.detector = null;
         this.isRunning = false;
         this.animationId = null;
+        
+        // 输入源管理器 - 现在是唯一的输入源
+        this.inputSourceManager = inputSourceManager;
+        if (!this.inputSourceManager) {
+            throw new Error('InputSourceManager is required for PoseEstimator');
+        }
         
         // 配置选项
         this.options = {
@@ -40,127 +50,13 @@ export class PoseEstimator {
             lastErrorTime: 0
         };
         
+        // 绑定事件监听器
+        this._bindEventListeners();
+        
         console.log('🤖 PoseEstimator已初始化:', this.options);
     }
     
-    /**
-     * 设置摄像头
-     * @returns {Promise<void>}
-     */
-    async _setupCamera() {
-        try {
-            console.log('📷 正在设置摄像头...');
-            
-            // 创建隐藏的video元素
-            this.video = document.createElement('video');
-            if (!this.video) {
-                throw new Error('无法创建video元素');
-            }
-            
-            // 设置video属性
-            this.video.id = 'video';
-            this.video.autoplay = true;
-            this.video.muted = true;
-            this.video.playsInline = true;
-            
-            // 多层隐藏策略
-            Object.assign(this.video.style, {
-                display: 'none',
-                visibility: 'hidden',
-                position: 'absolute',
-                left: '-9999px',
-                width: '1px',
-                height: '1px'
-            });
-            
-            // 添加到DOM
-            document.body.appendChild(this.video);
-            
-            // 获取摄像头流
-            const stream = await ErrorHandler.retry(
-                () => navigator.mediaDevices.getUserMedia(CONFIG.CAMERA.CONSTRAINTS),
-                3,
-                1000
-            );
-            
-            if (!stream) {
-                throw new Error('获取摄像头流失败');
-            }
-            
-            // 设置视频源
-            this.video.srcObject = stream;
-            
-            // 等待视频元数据加载
-            await new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error('视频元数据加载超时'));
-                }, CONFIG.CAMERA.TIMEOUT);
-                
-                this.video.addEventListener('loadedmetadata', () => {
-                    clearTimeout(timeout);
-                    resolve();
-                }, { once: true });
-                
-                this.video.addEventListener('error', (error) => {
-                    clearTimeout(timeout);
-                    reject(new Error(`视频加载错误: ${error.message}`));
-                }, { once: true });
-            });
-            
-            // 开始播放视频
-            await new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error('视频播放超时'));
-                }, CONFIG.CAMERA.TIMEOUT);
-                
-                this.video.addEventListener('playing', () => {
-                    clearTimeout(timeout);
-                    resolve();
-                }, { once: true });
-                
-                this.video.play().catch(reject);
-            });
-            
-            // 等待视频就绪
-            await new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error('视频就绪检查超时'));
-                }, CONFIG.CAMERA.TIMEOUT);
-                
-                const checkReady = () => {
-                    if (this.video && this.video.readyState >= 2) {
-                        clearTimeout(timeout);
-                        resolve();
-                    } else {
-                        setTimeout(checkReady, 100);
-                    }
-                };
-                
-                checkReady();
-            });
-            
-            // 设置canvas尺寸
-            this.canvas.width = this.video.videoWidth || CONFIG.CAMERA.WIDTH;
-            this.canvas.height = this.video.videoHeight || CONFIG.CAMERA.HEIGHT;
-            
-            console.log(`📷 摄像头设置完成: ${this.canvas.width}x${this.canvas.height}`);
-            
-        } catch (error) {
-            // 清理资源
-            if (this.video) {
-                if (this.video.srcObject) {
-                    const tracks = this.video.srcObject.getTracks();
-                    tracks.forEach(track => track.stop());
-                }
-                if (this.video.parentNode) {
-                    this.video.parentNode.removeChild(this.video);
-                }
-                this.video = null;
-            }
-            
-            throw ErrorHandler.createError('Camera', ErrorHandler.handleCameraError(error), error);
-        }
-    }
+
     
     /**
      * 加载姿态检测模型
@@ -170,34 +66,18 @@ export class PoseEstimator {
         try {
             console.log(`🤖 正在加载${this.options.modelType}模型...`);
             
-            const modelUrl = this.options.modelType === 'MoveNet' ? 
-                CONFIG.MODEL.MOVENET_URL : CONFIG.MODEL.POSENET_URL;
+            // 使用单例模式的TensorFlow提供器（避免重复初始化）
+            const { TensorFlowProvider } = await import('../ai/models/TensorFlowProvider.js');
+            this.tensorFlowProvider = TensorFlowProvider.getInstance({
+                backend: this.options.backend,
+                modelCacheSize: this.options.modelCacheSize
+            });
             
-            this.detector = await modelCacheManager.getOrCreateModel(
-                this.options.modelType,
-                modelUrl,
-                async () => {
-                    if (this.options.modelType === 'MoveNet') {
-                        return await poseDetection.createDetector(
-                            poseDetection.SupportedModels.MoveNet,
-                            {
-                                modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-                            }
-                        );
-                    } else {
-                        return await poseDetection.createDetector(
-                            poseDetection.SupportedModels.PoseNet,
-                            {
-                                quantBytes: 2,
-                                architecture: 'MobileNetV1',
-                                outputStride: 16,
-                                inputResolution: { width: 353, height: 257 },
-                                multiplier: 0.75
-                            }
-                        );
-                    }
-                }
-            );
+            // 确保TensorFlow环境已初始化
+            await this.tensorFlowProvider.initialize();
+            
+            // 使用TensorFlow提供器获取检测器
+            this.detector = await this.tensorFlowProvider.getDetector(this.options.modelType);
             
             console.log(`✅ ${this.options.modelType}模型加载完成`);
             
@@ -215,8 +95,19 @@ export class PoseEstimator {
         try {
             const frameStartTime = performanceMonitor.frameStart();
             
-            // 检查video状态
-            if (!this.video || this.video.readyState < 2) {
+            // 获取当前帧 - 只使用 InputSourceManager
+            const currentFrame = this.inputSourceManager?.getCurrentFrame();
+            
+            // 检查是否有有效的帧源
+            if (!currentFrame) {
+                console.warn('PoseEstimator: No current frame available from InputSourceManager');
+                this.animationId = requestAnimationFrame(() => this._detectPoseInRealTime());
+                return;
+            }
+            
+            // 验证帧类型
+            if (!this._isValidFrame(currentFrame)) {
+                console.warn('PoseEstimator: Invalid frame type received:', typeof currentFrame);
                 this.animationId = requestAnimationFrame(() => this._detectPoseInRealTime());
                 return;
             }
@@ -224,11 +115,11 @@ export class PoseEstimator {
             // 清空画布
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
             
-            // 绘制视频帧
-            this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+            // 绘制当前帧到画布
+            this.ctx.drawImage(currentFrame, 0, 0, this.canvas.width, this.canvas.height);
             
-            // 姿态检测
-            const poses = await this.detector.estimatePoses(this.video);
+            // 姿态检测 - 使用当前帧作为输入
+            const poses = await this.detector.estimatePoses(currentFrame);
             
             if (poses && poses.length > 0) {
                 const pose = poses[0];
@@ -248,11 +139,6 @@ export class PoseEstimator {
                     this._drawKeypoints(filteredKeypoints);
                 }
             }
-            
-            // // 绘制性能信息
-            // if (this.options.showPerformanceInfo) {
-            //     this._drawPerformanceInfo();
-            // }
             
             // 更新性能统计
             performanceMonitor.frameEnd(frameStartTime);
@@ -313,6 +199,19 @@ export class PoseEstimator {
                 }, Math.min(100 * this.stats.errorCount, 1000)); // 递增延迟，最大1秒
             }
         }
+    }
+    
+    /**
+     * 验证帧是否有效
+     * @param {*} frame - 要验证的帧
+     * @returns {boolean} 帧是否有效
+     */
+    _isValidFrame(frame) {
+        return frame && (
+            frame instanceof HTMLCanvasElement ||
+            frame instanceof HTMLVideoElement ||
+            frame instanceof HTMLImageElement
+        );
     }
     
     /**
@@ -386,10 +285,20 @@ export class PoseEstimator {
                 throw new Error('Canvas或Context无效');
             }
             
+            // 检查输入源管理器
+            if (!this.inputSourceManager) {
+                throw new Error('InputSourceManager未初始化');
+            }
+            
             console.log('🚀 启动姿态估计器...');
             
-            // 设置摄像头
-            await this._setupCamera();
+            // 设置canvas尺寸（从输入源获取）
+            const sourceDimensions = this.inputSourceManager.getSourceDimensions();
+            if (sourceDimensions) {
+                this.canvas.width = sourceDimensions.width;
+                this.canvas.height = sourceDimensions.height;
+                console.log(`📐 Canvas尺寸设置为: ${this.canvas.width}x${this.canvas.height}`);
+            }
             
             // 加载模型
             await this._loadModel();
@@ -400,6 +309,16 @@ export class PoseEstimator {
             // 开始检测循环
             this.isRunning = true;
             this._detectPoseInRealTime();
+            
+            // 发布启动成功事件
+            eventBus.emit(EVENTS.POSE_STARTED, {
+                modelType: this.options.modelType,
+                canvasSize: {
+                    width: this.canvas.width,
+                    height: this.canvas.height
+                },
+                options: this.options
+            });
             
             console.log('✅ 姿态估计器启动成功');
             
@@ -430,6 +349,9 @@ export class PoseEstimator {
         
         performanceMonitor.stop();
         
+        // 发布停止事件
+        eventBus.emit(EVENTS.POSE_STOPPED, {});
+        
         console.log('✅ 姿态估计器已停止');
     }
     
@@ -439,20 +361,6 @@ export class PoseEstimator {
      */
     async cleanup() {
         await this.stop();
-        
-        // 清理摄像头
-        if (this.video) {
-            if (this.video.srcObject) {
-                const tracks = this.video.srcObject.getTracks();
-                tracks.forEach(track => track.stop());
-            }
-            
-            if (this.video.parentNode) {
-                this.video.parentNode.removeChild(this.video);
-            }
-            
-            this.video = null;
-        }
         
         // 清理模型
         if (this.detector) {
@@ -464,6 +372,16 @@ export class PoseEstimator {
                 console.warn('⚠️ 模型清理失败:', error);
             }
             this.detector = null;
+        }
+        
+        // 清理TensorFlow提供器
+        if (this.tensorFlowProvider) {
+            try {
+                await this.tensorFlowProvider.cleanup();
+            } catch (error) {
+                console.warn('⚠️ TensorFlow提供器清理失败:', error);
+            }
+            this.tensorFlowProvider = null;
         }
         
         // 清理TensorFlow内存
@@ -488,13 +406,37 @@ export class PoseEstimator {
     }
     
     /**
+     * 绑定事件监听器
+     */
+    _bindEventListeners() {
+        // 监听输入源事件
+        eventBus.on(EVENTS.INPUT_SOURCE_CHANGED, (data) => {
+            console.log('📹 输入源已切换:', data.sourceType);
+            // 更新canvas尺寸
+            if (this.canvas && data.dimensions) {
+                this.canvas.width = data.dimensions.width;
+                this.canvas.height = data.dimensions.height;
+                console.log(`📐 Canvas尺寸已更新: ${this.canvas.width}x${this.canvas.height}`);
+            }
+        });
+        
+        eventBus.on(EVENTS.INPUT_SOURCE_ERROR, (data) => {
+            console.error('📹 输入源错误:', data.error);
+            eventBus.emit(EVENTS.POSE_ERROR, {
+                error: data.error,
+                source: 'input_source'
+            });
+        });
+    }
+    
+    /**
      * 获取当前状态
      * @returns {Object} 当前状态信息
      */
     getStatus() {
         return {
             isRunning: this.isRunning,
-            hasVideo: !!this.video,
+            hasInputSource: !!this.inputSourceManager?.isSourceActive(),
             hasDetector: !!this.detector,
             canvasSize: {
                 width: this.canvas.width,
@@ -502,9 +444,311 @@ export class PoseEstimator {
             },
             options: this.options,
             performance: performanceMonitor.getReport(),
-            cache: modelCacheManager.getStats(),
+            tensorflow: this.tensorFlowProvider ? this.tensorFlowProvider.getStats() : null,
+            filter: this.filterManager.getStats(),
+            inputSource: this.inputSourceManager ? {
+                isActive: this.inputSourceManager.isSourceActive(),
+                sourceType: this.inputSourceManager.getSourceType(),
+                dimensions: this.inputSourceManager.getSourceDimensions()
+            } : null
+        };
+    }
+    
+    // ========== IPoseEstimator 接口方法实现 ==========
+    
+    /**
+     * 开始姿态检测
+     * @returns {Promise<void>}
+     */
+    async startDetection() {
+        return await this.start();
+    }
+    
+    /**
+     * 停止姿态检测
+     * @returns {Promise<void>}
+     */
+    async stopDetection() {
+        return await this.stop();
+    }
+    
+    /**
+     * 暂停姿态检测
+     */
+    pauseDetection() {
+        this.isRunning = false;
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+    }
+    
+    /**
+     * 恢复姿态检测
+     */
+    resumeDetection() {
+        if (!this.isRunning && this.detector && this.inputSourceManager?.isSourceActive()) {
+            this.isRunning = true;
+            this._detectPoseInRealTime();
+        }
+    }
+    
+    /**
+     * 设置模型类型
+     * @param {string} modelType - 模型类型
+     * @returns {Promise<void>}
+     */
+    async setModelType(modelType) {
+        if (this.options.modelType === modelType) {
+            return; // 已经是相同的模型类型
+        }
+        
+        const wasRunning = this.isRunning;
+        if (wasRunning) {
+            await this.stop();
+        }
+        
+        this.options.modelType = modelType;
+        
+        if (this.tensorFlowProvider) {
+            this.detector = await this.tensorFlowProvider.getDetector(modelType);
+        }
+        
+        if (wasRunning) {
+            await this.start();
+        }
+    }
+    
+    /**
+     * 获取当前模型类型
+     * @returns {string} 模型类型
+     */
+    getCurrentModelType() {
+        return this.options.modelType;
+    }
+    
+    /**
+     * 设置检测配置
+     * @param {Object} config - 检测配置
+     */
+    setDetectionConfig(config) {
+        this.options = { ...this.options, ...config };
+    }
+    
+    /**
+     * 获取检测配置
+     * @returns {Object} 检测配置
+     */
+    getDetectionConfig() {
+        return { ...this.options };
+    }
+    
+    /**
+     * 处理视频帧
+     * @param {HTMLVideoElement|HTMLCanvasElement|ImageData} input - 输入源
+     * @returns {Promise<Object>} 检测结果
+     */
+    async processFrame(input) {
+        if (!this.detector) {
+            throw new Error('检测器未初始化');
+        }
+        
+        const poses = await this.detector.estimatePoses(input);
+        
+        if (poses && poses.length > 0) {
+            const pose = poses[0];
+            const filteredKeypoints = this.filterManager.filterPose(
+                pose.keypoints,
+                performance.now()
+            );
+            
+            return {
+                poses: [{ ...pose, keypoints: filteredKeypoints }],
+                timestamp: performance.now()
+            };
+        }
+        
+        return { poses: [], timestamp: performance.now() };
+    }
+    
+    /**
+     * 获取检测状态
+     * @returns {string} 检测状态
+     */
+    getDetectionStatus() {
+        if (!this.detector) return 'not_initialized';
+        if (this.isRunning) return 'running';
+        return 'stopped';
+    }
+    
+    /**
+     * 获取性能指标
+     * @returns {Object} 性能指标
+     */
+    getPerformanceMetrics() {
+        return {
+            ...performanceMonitor.getReport(),
+            frameCount: this.stats.frameCount,
+            errorCount: this.stats.errorCount,
+            tensorflow: this.tensorFlowProvider ? this.tensorFlowProvider.getStats() : null,
             filter: this.filterManager.getStats()
         };
+    }
+    
+    /**
+     * 重置性能指标
+     */
+    resetPerformanceMetrics() {
+        performanceMonitor.reset();
+        this.stats.frameCount = 0;
+        this.stats.errorCount = 0;
+        this.stats.lastErrorTime = 0;
+        this.stats.lastStatsUpdate = 0;
+    }
+    
+    /**
+     * 设置输出画布
+     * @param {HTMLCanvasElement} canvas - 输出画布
+     */
+    setOutputCanvas(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+    }
+    
+    /**
+     * 启用/禁用滤波器
+     * @param {boolean} enabled - 是否启用
+     */
+    setFilterEnabled(enabled) {
+        this.filterManager.setEnabled(enabled);
+    }
+    
+    /**
+     * 设置滤波器配置
+     * @param {Object} config - 滤波器配置
+     */
+    setFilterConfig(config) {
+        this.filterManager.updateParameters(config);
+    }
+    
+    // ========== IBaseModule 接口方法实现 ==========
+    
+    /**
+     * 初始化模块
+     * @returns {Promise<void>}
+     */
+    async init() {
+        try {
+            console.log('🚀 初始化姿态估计器...');
+            
+            // 检查输入源管理器
+            if (!this.inputSourceManager) {
+                throw new Error('InputSourceManager is required for initialization');
+            }
+            
+            // 使用单例模式的TensorFlow提供器（避免重复初始化）
+            const { TensorFlowProvider } = await import('../ai/models/TensorFlowProvider.js');
+            this.tensorFlowProvider = TensorFlowProvider.getInstance({
+                backend: this.options.backend,
+                modelCacheSize: this.options.modelCacheSize
+            });
+            await this.tensorFlowProvider.initialize();
+            
+            // 发布初始化完成事件
+            eventBus.emit(EVENTS.POSE_INITIALIZED, {
+                modelType: this.options.modelType,
+                options: this.options
+            });
+            
+            console.log('✅ 姿态估计器初始化完成');
+            
+        } catch (error) {
+            throw ErrorHandler.createError('Initialization', `初始化失败: ${error.message}`, error);
+        }
+    }
+    
+    /**
+     * 获取模块状态
+     * @returns {string} 模块状态
+     */
+    getStatus() {
+        if (!this.tensorFlowProvider) return 'not_initialized';
+        if (this.isRunning) return 'running';
+        return 'ready';
+    }
+    
+    /**
+     * 获取模块名称
+     * @returns {string} 模块名称
+     */
+    getName() {
+        return 'PoseEstimator';
+    }
+    
+    /**
+     * 获取模块版本
+     * @returns {string} 模块版本
+     */
+    getVersion() {
+        return '1.0.0';
+    }
+    
+    /**
+     * 获取模块状态信息
+     * @returns {Object} 状态信息
+     */
+    getState() {
+        return {
+            isRunning: this.isRunning,
+            hasInputSource: !!this.inputSourceManager?.isSourceActive(),
+            hasDetector: !!this.detector,
+            canvasSize: {
+                width: this.canvas.width,
+                height: this.canvas.height
+            },
+            options: this.options,
+            performance: performanceMonitor.getReport(),
+            tensorflow: this.tensorFlowProvider ? this.tensorFlowProvider.getStats() : null,
+            filter: this.filterManager.getStats(),
+            inputSource: this.inputSourceManager ? {
+                isActive: this.inputSourceManager.isSourceActive(),
+                sourceType: this.inputSourceManager.getSourceType(),
+                dimensions: this.inputSourceManager.getSourceDimensions()
+            } : null
+        };
+    }
+    
+    /**
+     * 重置模块
+     * @returns {Promise<void>}
+     */
+    async reset() {
+        await this.stop();
+        this.resetPerformanceMetrics();
+        this.filterManager.resetFilters();
+        
+        // 重置选项为默认值
+        this.options = {
+            modelType: CONFIG.MODEL.DEFAULT_TYPE,
+            showSkeleton: true,
+            showKeypoints: true,
+            ...this.options
+        };
+        
+        console.log('🔄 姿态估计器已重置');
+    }
+    
+    /**
+     * 销毁模块
+     * @returns {Promise<void>}
+     */
+    async destroy() {
+        await this.cleanup();
+        
+        // 发布销毁事件
+        eventBus.emit(EVENTS.POSE_DESTROYED, {});
+        
+        console.log('💥 姿态估计器已销毁');
     }
     
     /**
@@ -512,42 +756,22 @@ export class PoseEstimator {
      * @returns {Promise<void>}
      */
     static async preloadModels() {
-        console.log('🔄 开始预加载模型...');
-        
-        const modelConfigs = [
-            {
-                type: 'MoveNet',
-                url: CONFIG.MODEL.MOVENET_URL,
-                createFn: () => poseDetection.createDetector(
-                    poseDetection.SupportedModels.MoveNet,
-                    {
-                        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-                    }
-                )
-            },
-            {
-                type: 'PoseNet',
-                url: CONFIG.MODEL.POSENET_URL,
-                createFn: () => poseDetection.createDetector(
-                    poseDetection.SupportedModels.PoseNet,
-                    {
-                        quantBytes: 2,
-                        architecture: 'MobileNetV1',
-                        outputStride: 16,
-                        inputResolution: { width: 353, height: 257 },
-                        multiplier: 0.75
-                    }
-                )
-            }
-        ];
-        
-        const preloadPromises = modelConfigs.map(config => 
-            modelCacheManager.preloadModel(config.type, config.url, config.createFn)
-        );
-        
         try {
-            await Promise.allSettled(preloadPromises);
+            console.log('🔄 开始预加载模型...');
+            
+            // 使用单例模式的TensorFlow提供器（避免重复初始化）
+            const { TensorFlowProvider } = await import('../ai/models/TensorFlowProvider.js');
+            const tensorFlowProvider = TensorFlowProvider.getInstance();
+            await tensorFlowProvider.initialize();
+            
+            const models = [
+                { type: MODEL_TYPES.MOVENET },
+                { type: MODEL_TYPES.POSENET }
+            ];
+            
+            await tensorFlowProvider.batchPreloadModels(models);
             console.log('✅ 模型预加载完成');
+            
         } catch (error) {
             console.warn('⚠️ 部分模型预加载失败:', error);
         }

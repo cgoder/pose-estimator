@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>摄像头显示测试</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            background: #f8fafc;
+        }
+        
+        .test-section h3 {
+            margin-top: 0;
+            color: #2d3748;
+        }
+        
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            background: white;
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            margin: 20px auto;
+            display: block;
+            text-align: center;
+        }
+        
+        canvas {
+            display: block;
+            border-radius: 13px;
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 0 10px;
+            transition: transform 0.2s ease;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 摄像头显示测试</h1>
+        
+        <div class="test-section">
+            <h3>1. 应用容器状态检查</h3>
+            <div id="container-status" class="status info">检查中...</div>
+            <button onclick="checkContainerStatus()">重新检查容器状态</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>2. Canvas显示测试</h3>
+            <div class="canvas-container">
+                <canvas id="test-canvas" width="640" height="480"></canvas>
+            </div>
+            <div class="controls">
+                <button onclick="testCanvasRendering()">测试Canvas渲染</button>
+                <button onclick="clearCanvas()">清空Canvas</button>
+            </div>
+            <div id="canvas-status" class="status info">等待测试...</div>
+        </div>
+        
+        <div class="test-section">
+            <h3>3. 摄像头访问测试</h3>
+            <div class="controls">
+                <button onclick="startCamera()" id="start-camera-btn">启动摄像头</button>
+                <button onclick="stopCamera()" id="stop-camera-btn" disabled>停止摄像头</button>
+            </div>
+            <div id="camera-status" class="status info">等待启动...</div>
+        </div>
+        
+        <div class="test-section">
+            <h3>4. 实时日志</h3>
+            <div id="log" class="log">等待日志输出...
+</div>
+            <button onclick="clearLog()">清空日志</button>
+        </div>
+    </div>
+
+    <script type="module">
+        let videoElement = null;
+        let animationId = null;
+        
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        function setStatus(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${type}`;
+        }
+        
+        function checkContainerStatus() {
+            log('检查应用容器状态...');
+            
+            const appMain = document.getElementById('app-main');
+            const appLoading = document.getElementById('app-loading');
+            
+            let status = [];
+            
+            if (appMain) {
+                const style = getComputedStyle(appMain);
+                status.push(`app-main: display=${style.display}, opacity=${style.opacity}`);
+            } else {
+                status.push('app-main: 元素不存在');
+            }
+            
+            if (appLoading) {
+                const style = getComputedStyle(appLoading);
+                status.push(`app-loading: display=${style.display}`);
+            } else {
+                status.push('app-loading: 元素不存在');
+            }
+            
+            const message = status.join(', ');
+            setStatus('container-status', message, 'info');
+            log(`容器状态: ${message}`);
+        }
+        
+        function testCanvasRendering() {
+            log('测试Canvas渲染...');
+            
+            const canvas = document.getElementById('test-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            try {
+                // 绘制彩色渐变背景
+                const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                gradient.addColorStop(0, '#667eea');
+                gradient.addColorStop(1, '#764ba2');
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 绘制测试文本
+                ctx.fillStyle = 'white';
+                ctx.font = '24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Canvas渲染测试成功!', canvas.width / 2, canvas.height / 2);
+                
+                // 绘制时间戳
+                ctx.font = '16px Arial';
+                ctx.fillText(new Date().toLocaleTimeString(), canvas.width / 2, canvas.height / 2 + 40);
+                
+                setStatus('canvas-status', 'Canvas渲染成功', 'success');
+                log('Canvas渲染测试成功');
+                
+            } catch (error) {
+                setStatus('canvas-status', `Canvas渲染失败: ${error.message}`, 'error');
+                log(`Canvas渲染失败: ${error.message}`);
+            }
+        }
+        
+        function clearCanvas() {
+            const canvas = document.getElementById('test-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            setStatus('canvas-status', 'Canvas已清空', 'info');
+            log('Canvas已清空');
+        }
+        
+        async function startCamera() {
+            log('启动摄像头...');
+            
+            const startBtn = document.getElementById('start-camera-btn');
+            const stopBtn = document.getElementById('stop-camera-btn');
+            
+            startBtn.disabled = true;
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
+                
+                // 创建video元素
+                if (!videoElement) {
+                    videoElement = document.createElement('video');
+                    videoElement.style.display = 'none';
+                    document.body.appendChild(videoElement);
+                }
+                
+                videoElement.srcObject = stream;
+                videoElement.play();
+                
+                // 等待video准备就绪
+                await new Promise((resolve) => {
+                    videoElement.onloadedmetadata = resolve;
+                });
+                
+                // 开始渲染到Canvas
+                renderCameraToCanvas();
+                
+                setStatus('camera-status', '摄像头启动成功，正在渲染到Canvas', 'success');
+                log('摄像头启动成功');
+                
+                stopBtn.disabled = false;
+                
+            } catch (error) {
+                setStatus('camera-status', `摄像头启动失败: ${error.message}`, 'error');
+                log(`摄像头启动失败: ${error.message}`);
+                startBtn.disabled = false;
+            }
+        }
+        
+        function renderCameraToCanvas() {
+            const canvas = document.getElementById('test-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            function render() {
+                if (videoElement && videoElement.readyState >= 2) {
+                    // 绘制视频帧
+                    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                    
+                    // 绘制覆盖信息
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(10, 10, 200, 60);
+                    
+                    ctx.fillStyle = 'white';
+                    ctx.font = '14px Arial';
+                    ctx.fillText('实时摄像头画面', 20, 30);
+                    ctx.fillText(new Date().toLocaleTimeString(), 20, 50);
+                }
+                
+                animationId = requestAnimationFrame(render);
+            }
+            
+            render();
+        }
+        
+        function stopCamera() {
+            log('停止摄像头...');
+            
+            const startBtn = document.getElementById('start-camera-btn');
+            const stopBtn = document.getElementById('stop-camera-btn');
+            
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            
+            if (videoElement && videoElement.srcObject) {
+                const tracks = videoElement.srcObject.getTracks();
+                tracks.forEach(track => track.stop());
+                videoElement.srcObject = null;
+            }
+            
+            clearCanvas();
+            
+            setStatus('camera-status', '摄像头已停止', 'info');
+            log('摄像头已停止');
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').textContent = '日志已清空...\n';
+        }
+        
+        // 暴露函数到全局作用域
+        window.checkContainerStatus = checkContainerStatus;
+        window.testCanvasRendering = testCanvasRendering;
+        window.clearCanvas = clearCanvas;
+        window.startCamera = startCamera;
+        window.stopCamera = stopCamera;
+        window.clearLog = clearLog;
+        
+        // 页面加载完成后自动检查状态
+        window.addEventListener('load', () => {
+            log('页面加载完成，开始检查状态...');
+            checkContainerStatus();
+            testCanvasRendering();
+        });
+    </script>
+</body>
+</html>
