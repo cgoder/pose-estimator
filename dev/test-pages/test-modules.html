@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模块导入测试</title>
+</head>
+<body>
+    <h1>模块导入测试</h1>
+    <div id="status">正在测试模块导入...</div>
+    
+    <script type="module">
+        async function testModuleImports() {
+            const statusDiv = document.getElementById('status');
+            
+            try {
+                console.log('测试 EventBus 导入...');
+                const { eventBus } = await import('./dist/core/EventBus.js');
+                console.log('✅ EventBus 导入成功:', eventBus);
+                
+                console.log('测试 StateManager 导入...');
+                const { stateManager } = await import('./dist/core/StateManager.js');
+                console.log('✅ StateManager 导入成功:', stateManager);
+                
+                console.log('测试 BaseDataSource 导入...');
+                const { BaseDataSource } = await import('./dist/core/dataSources/BaseDataSource.js');
+                console.log('✅ BaseDataSource 导入成功:', BaseDataSource);
+                
+                console.log('测试 UIController 导入...');
+                const { UIController } = await import('./dist/ui/UIController.js');
+                console.log('✅ UIController 导入成功:', UIController);
+                
+                console.log('测试 app.js 导入...');
+                const { startApp } = await import('./dist/app.js');
+                console.log('✅ app.js 导入成功:', startApp);
+                
+                statusDiv.innerHTML = '<span style="color: green;">✅ 所有模块导入成功！</span>';
+                
+            } catch (error) {
+                console.error('❌ 模块导入失败:', error);
+                statusDiv.innerHTML = `<span style="color: red;">❌ 模块导入失败: ${error.message}</span>`;
+            }
+        }
+        
+        testModuleImports();
+    </script>
+</body>
+</html>

@@ -6,21 +6,36 @@
   "main": "src/main.js",
   "scripts": {
     "dev": "http-server -p 8080 -c-1 --cors",
+    "dev:refactored": "http-server -p 8081 -c-1 --cors -o index-refactored.html",
     "start": "npm run dev",
-    "build": "tsc",
+    "start:refactored": "npm run dev:refactored",
+    "build": "npm run build:worker-config && tsc",
     "build:watch": "tsc --watch",
-    "lint": "eslint src/**/*.js",
-    "lint:fix": "eslint src/**/*.js --fix",
-    "format": "prettier --write src/**/*.js",
+    "build:refactored": "tsc && npm run copy:assets",
+    "build:worker-config": "node scripts/generate-worker-config.cjs",
+    "copy:assets": "cp index-refactored.html dist/ && cp -r assets dist/ 2>/dev/null || true",
+    "lint": "eslint src/**/*.{js,ts} --ext .ts,.js",
+    "lint:fix": "eslint src/**/*.{js,ts} --ext .ts,.js --fix",
+    "format": "prettier --write \"src/**/*.{js,ts,json,md}\"",
+    "format:check": "prettier --check \"src/**/*.{js,ts,json,md}\"",
+    "type-check": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "clean": "rimraf dist",
+    "test:ci": "jest --ci --coverage --watchAll=false",
+    "test:unit": "jest --testPathPattern=tests/",
+    "clean": "rimraf dist coverage",
+    "quality": "npm run type-check && npm run lint && npm run format:check && npm run test:ci",
+    "quality:fix": "npm run format && npm run lint:fix",
     "serve": "http-server -p 8080 -c-1 --cors --ssl --cert cert.pem --key key.pem",
+    "serve:refactored": "http-server -p 8081 -c-1 --cors --ssl --cert cert.pem --key key.pem -o index-refactored.html",
     "generate-cert": "openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes",
     "analyze": "webpack-bundle-analyzer dist/bundle.js",
     "deploy": "npm run build && npm run deploy:gh-pages",
-    "deploy:gh-pages": "gh-pages -d dist"
+    "deploy:gh-pages": "gh-pages -d dist",
+    "demo": "echo '🚀 启动重构版演示...' && npm run dev:refactored",
+    "precommit": "npm run quality:fix && npm run test:ci",
+    "prepare": "npm run build"
   },
   "keywords": [
     "pose-estimation",
@@ -30,8 +45,7 @@
     "machine-learning",
     "real-time",
     "webcam",
-    "javascript",
-    "pwa"
+    "javascript"
   ],
   "author": "Your Name",
   "license": "MIT",
@@ -54,9 +68,11 @@
     "gh-pages": "^6.0.0",
     "http-server": "^14.1.1",
     "jest": "^29.6.0",
+    "jest-canvas-mock": "^2.5.0",
     "jest-environment-jsdom": "^29.6.0",
     "prettier": "^3.0.0",
     "rimraf": "^5.0.0",
+    "ts-jest": "^29.1.0",
     "typescript": "^5.1.0",
     "webpack-bundle-analyzer": "^4.9.0"
   },
@@ -79,27 +95,6 @@
     "not dead",
     "not ie 11"
   ],
-  "jest": {
-    "testEnvironment": "jsdom",
-    "setupFilesAfterEnv": [
-      "<rootDir>/src/tests/setup.js"
-    ],
-    "testMatch": [
-      "<rootDir>/src/**/__tests__/**/*.{js,ts}",
-      "<rootDir>/src/**/*.{test,spec}.{js,ts}"
-    ],
-    "collectCoverageFrom": [
-      "src/**/*.{js,ts}",
-      "!src/**/*.d.ts",
-      "!src/tests/**"
-    ],
-    "coverageDirectory": "coverage",
-    "coverageReporters": [
-      "text",
-      "lcov",
-      "html"
-    ]
-  },
   "eslintConfig": {
     "env": {
       "browser": true,

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker 修复测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        #logs {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Worker 修复测试</h1>
+        
+        <div id="status" class="status info">
+            准备测试 Worker 修复...
+        </div>
+
+        <div>
+            <button onclick="testWorkerSimple()">测试简化版 Worker</button>
+            <button onclick="testWorkerOriginal()">测试原版 Worker</button>
+            <button onclick="clearLogs()">清除日志</button>
+        </div>
+
+        <h3>测试日志:</h3>
+        <div id="logs"></div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const logsEl = document.getElementById('logs');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}\n`;
+            logsEl.textContent += logMessage;
+            logsEl.scrollTop = logsEl.scrollHeight;
+            
+            if (type === 'error') {
+                console.error(message);
+            } else {
+                console.log(message);
+            }
+        }
+
+        function updateStatus(message, type = 'info') {
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+
+        function clearLogs() {
+            logsEl.textContent = '';
+        }
+
+        async function testWorkerSimple() {
+            updateStatus('测试简化版 Worker...', 'info');
+            log('🚀 开始测试简化版 Worker');
+
+            try {
+                const worker = new Worker('./src/workers/pose-worker-simple.ts', { type: 'module' });
+                
+                worker.onmessage = function(event) {
+                    const { type, payload, error } = event.data;
+                    
+                    if (type === 'error') {
+                        log(`❌ Worker 错误: ${error}`, 'error');
+                        updateStatus('简化版 Worker 测试失败', 'error');
+                    } else if (type === 'event') {
+                        log(`📢 Worker 事件: ${payload.eventType}`);
+                        if (payload.eventType === 'initialized') {
+                            log(`✅ Worker 初始化成功: ${JSON.stringify(payload.data)}`);
+                            updateStatus('简化版 Worker 测试成功', 'success');
+                        }
+                    } else {
+                        log(`📨 Worker 响应: ${JSON.stringify(payload)}`);
+                    }
+                };
+
+                worker.onerror = function(error) {
+                    log(`❌ Worker 全局错误: ${error.message}`, 'error');
+                    updateStatus('简化版 Worker 测试失败', 'error');
+                };
+
+                // 发送初始化消息
+                worker.postMessage({
+                    id: 'test-init',
+                    type: 'initialize'
+                });
+
+                log('📤 已发送初始化消息到简化版 Worker');
+
+            } catch (error) {
+                log(`❌ 创建简化版 Worker 失败: ${error.message}`, 'error');
+                updateStatus('简化版 Worker 创建失败', 'error');
+            }
+        }
+
+        async function testWorkerOriginal() {
+            updateStatus('测试原版 Worker...', 'info');
+            log('🚀 开始测试原版 Worker');
+
+            try {
+                const worker = new Worker('./src/workers/pose-worker.ts', { type: 'module' });
+                
+                worker.onmessage = function(event) {
+                    const { type, payload, error } = event.data;
+                    
+                    if (type === 'error') {
+                        log(`❌ Worker 错误: ${error}`, 'error');
+                        updateStatus('原版 Worker 测试失败', 'error');
+                    } else if (type === 'event') {
+                        log(`📢 Worker 事件: ${payload.eventType}`);
+                        if (payload.eventType === 'initialized') {
+                            log(`✅ Worker 初始化成功: ${JSON.stringify(payload.data)}`);
+                            updateStatus('原版 Worker 测试成功', 'success');
+                        }
+                    } else {
+                        log(`📨 Worker 响应: ${JSON.stringify(payload)}`);
+                    }
+                };
+
+                worker.onerror = function(error) {
+                    log(`❌ Worker 全局错误: ${error.message}`, 'error');
+                    updateStatus('原版 Worker 测试失败', 'error');
+                };
+
+                // 发送初始化消息
+                worker.postMessage({
+                    id: 'test-init',
+                    type: 'initialize'
+                });
+
+                log('📤 已发送初始化消息到原版 Worker');
+
+            } catch (error) {
+                log(`❌ 创建原版 Worker 失败: ${error.message}`, 'error');
+                updateStatus('原版 Worker 创建失败', 'error');
+            }
+        }
+
+        // 页面加载完成后的初始化
+        window.addEventListener('load', function() {
+            log('🌐 页面加载完成');
+            updateStatus('准备就绪，可以开始测试', 'success');
+        });
+
+        // 全局错误处理
+        window.addEventListener('error', function(event) {
+            log(`🚨 全局错误: ${event.error?.message || event.message}`, 'error');
+        });
+
+        window.addEventListener('unhandledrejection', function(event) {
+            log(`🚨 未处理的 Promise 拒绝: ${event.reason}`, 'error');
+        });
+    </script>
+</body>
+</html>

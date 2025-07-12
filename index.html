@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>健身姿态分析系统 (重构版)</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃‍♂️</text></svg>">
+    
+    <!-- 基础样式 -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ecf0f1;
+            overflow: hidden;
+        }
+        
+        #app {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        /* 加载动画 */
+        .initial-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .initial-loading h1 {
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        
+        .initial-loading .spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid rgba(255,255,255,0.3);
+            border-top: 6px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+        
+        .initial-loading p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .initial-loading h1 {
+                font-size: 2rem;
+            }
+        }
+        
+        /* 确保canvas正确显示 */
+        #pose-canvas {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <!-- 应用容器 -->
+    <div id="app">
+        <div class="initial-loading">
+            <h1>🏃‍♂️ 健身姿态分析系统</h1>
+            <div class="spinner"></div>
+            <p>正在加载重构版本...</p>
+        </div>
+    </div>
+
+    <!-- 隐藏的Canvas元素，将由应用动态显示 -->
+    <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+
+    <!-- 应用启动脚本 -->
+    <script type="module">
+        // 检查浏览器兼容性
+        function checkBrowserCompatibility() {
+            const issues = [];
+            
+            // 检查基本 API
+            if (!window.navigator.mediaDevices) {
+                issues.push('不支持媒体设备API');
+            }
+            
+            if (!window.requestAnimationFrame) {
+                issues.push('不支持requestAnimationFrame');
+            }
+            
+            // 检查 WebGL
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) {
+                issues.push('不支持WebGL');
+            }
+            
+            return issues;
+        }
+        
+        // 显示兼容性问题
+        function showCompatibilityIssues(issues) {
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div style="
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100vh;
+                    padding: 2rem;
+                    text-align: center;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                ">
+                    <div style="
+                        background: #fff3cd;
+                        border: 2px solid #ffeaa7;
+                        border-radius: 8px;
+                        padding: 2rem;
+                        max-width: 500px;
+                    ">
+                        <h1 style="color: #856404; margin: 0 0 1rem 0;">⚠️ 浏览器兼容性问题</h1>
+                        <p style="margin: 0 0 1rem 0; color: #856404;">
+                            您的浏览器可能不完全支持此应用，发现以下问题：
+                        </p>
+                        <ul style="text-align: left; color: #856404; margin: 0 0 1rem 0;">
+                            ${issues.map(issue => `<li>${issue}</li>`).join('')}
+                        </ul>
+                        <p style="margin: 0 0 1rem 0; color: #856404;">
+                            建议使用最新版本的 Chrome、Firefox 或 Safari 浏览器。
+                        </p>
+                        <button onclick="location.reload()" style="
+                            background: #007bff;
+                            color: white;
+                            border: none;
+                            padding: 0.75rem 1.5rem;
+                            border-radius: 6px;
+                            cursor: pointer;
+                        ">🔄 重试</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 等待应用模块加载（不再等待 TensorFlow.js）
+        async function waitForAppModule() {
+            // 直接尝试加载应用模块，让应用内部决定如何加载 TensorFlow.js
+            return true;
+        }
+        
+        // 主启动函数
+        async function main() {
+            try {
+                // 检查浏览器兼容性
+                const compatibilityIssues = checkBrowserCompatibility();
+                if (compatibilityIssues.length > 0) {
+                    console.warn('⚠️ 浏览器兼容性问题:', compatibilityIssues);
+                    // 显示警告但继续运行
+                }
+                
+                // 等待应用模块准备
+                console.log('📦 准备加载应用模块...');
+                await waitForAppModule();
+                console.log('✅ 应用模块准备完成');
+                
+                // 动态导入应用模块
+                console.log('🚀 启动应用模块...');
+                const timestamp = Date.now();
+                const randomId = Math.random().toString(36).substring(7);
+                const { startApp } = await import(`./dist/app.js?v=${timestamp}&r=${randomId}`);
+                
+                // 启动应用
+                await startApp();
+                
+            } catch (error) {
+                console.error('❌ 应用启动失败:', error);
+                
+                // 显示错误信息
+                const app = document.getElementById('app');
+                app.innerHTML = `
+                    <div style="
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        height: 100vh;
+                        padding: 2rem;
+                        text-align: center;
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    ">
+                        <div style="
+                            background: #f8d7da;
+                            border: 2px solid #f5c6cb;
+                            border-radius: 8px;
+                            padding: 2rem;
+                            max-width: 500px;
+                        ">
+                            <h1 style="color: #721c24; margin: 0 0 1rem 0;">🚨 启动失败</h1>
+                            <p style="margin: 0 0 1rem 0; color: #721c24;">
+                                应用无法正常启动，请检查网络连接或刷新页面重试。
+                            </p>
+                            <details style="text-align: left; margin-top: 1rem;">
+                                <summary style="cursor: pointer; color: #721c24;">错误详情</summary>
+                                <pre style="
+                                    background: #f5f5f5;
+                                    padding: 1rem;
+                                    border-radius: 4px;
+                                    margin-top: 0.5rem;
+                                    font-size: 0.8rem;
+                                    overflow: auto;
+                                    color: #333;
+                                ">${error.message}</pre>
+                            </details>
+                            <button onclick="location.reload()" style="
+                                background: #dc3545;
+                                color: white;
+                                border: none;
+                                padding: 0.75rem 1.5rem;
+                                border-radius: 6px;
+                                cursor: pointer;
+                                margin-top: 1rem;
+                            ">🔄 重新加载</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // 启动应用
+        main();
+    </script>
+</body>
+</html>

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>依赖配置验证报告</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .report-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .report-section h3 {
+            margin-top: 0;
+            color: #ffd700;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            margin: 5px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .status-good { color: #4caf50; }
+        .status-warning { color: #ff9800; }
+        .status-error { color: #f44336; }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .report-table th,
+        .report-table td {
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 10px;
+            text-align: left;
+        }
+
+        .report-table th {
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: bold;
+        }
+
+        .code-block {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            overflow-x: auto;
+        }
+
+        .summary-card {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 10px;
+            text-align: center;
+            min-width: 150px;
+        }
+
+        .summary-number {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .recommendations {
+            background: rgba(255, 193, 7, 0.2);
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .recommendations h4 {
+            margin-top: 0;
+            color: #ffc107;
+        }
+
+        .recommendations ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 依赖配置验证报告</h1>
+        
+        <div class="report-section">
+            <h3>🎯 快速操作</h3>
+            <button onclick="runFullValidation()">运行完整验证</button>
+            <button onclick="generateReport()">生成详细报告</button>
+            <button onclick="exportReport()">导出报告</button>
+            <button onclick="clearReport()">清空报告</button>
+        </div>
+
+        <div class="report-section">
+            <h3>📈 验证摘要</h3>
+            <div id="summaryContainer">
+                <!-- 摘要卡片将在这里显示 -->
+            </div>
+        </div>
+
+        <div class="report-section">
+            <h3>📋 详细验证结果</h3>
+            <div id="detailsContainer">
+                <!-- 详细结果将在这里显示 -->
+            </div>
+        </div>
+
+        <div class="report-section">
+            <h3>💡 修复建议</h3>
+            <div id="recommendationsContainer">
+                <!-- 修复建议将在这里显示 -->
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        let validationResults = null;
+
+        // 运行完整验证
+        async function runFullValidation() {
+            try {
+                console.log('🔄 开始运行完整验证...');
+                
+                // 导入验证工具
+                const module = await import('./src/utils/DependencyConfigValidator.js');
+                const validator = new module.DependencyConfigValidator();
+                
+                // 运行验证
+                validationResults = await validator.validateProject();
+                
+                // 显示结果
+                displaySummary(validationResults);
+                displayDetails(validationResults);
+                displayRecommendations(validationResults);
+                
+                console.log('✅ 验证完成');
+                
+            } catch (error) {
+                console.error('❌ 验证失败:', error);
+                document.getElementById('detailsContainer').innerHTML = `
+                    <div class="status-error">
+                        <h4>验证失败</h4>
+                        <p>错误信息: ${error.message}</p>
+                        <div class="code-block">${error.stack}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // 显示摘要
+        function displaySummary(results) {
+            const container = document.getElementById('summaryContainer');
+            
+            const totalFiles = results.fileResults.length;
+            const passedFiles = results.fileResults.filter(f => f.status === 'passed').length;
+            const failedFiles = results.fileResults.filter(f => f.status === 'failed').length;
+            const warningFiles = results.fileResults.filter(f => f.status === 'warning').length;
+            
+            container.innerHTML = `
+                <div class="summary-card">
+                    <div class="summary-number status-good">${totalFiles}</div>
+                    <div>总文件数</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-number status-good">${passedFiles}</div>
+                    <div>通过验证</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-number status-warning">${warningFiles}</div>
+                    <div>警告</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-number status-error">${failedFiles}</div>
+                    <div>验证失败</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-number ${results.overallStatus === 'passed' ? 'status-good' : 'status-error'}">${results.overallStatus.toUpperCase()}</div>
+                    <div>总体状态</div>
+                </div>
+            `;
+        }
+
+        // 显示详细结果
+        function displayDetails(results) {
+            const container = document.getElementById('detailsContainer');
+            
+            let tableHTML = `
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>文件路径</th>
+                            <th>状态</th>
+                            <th>版本检查</th>
+                            <th>配置检查</th>
+                            <th>问题描述</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            results.fileResults.forEach(file => {
+                const statusClass = file.status === 'passed' ? 'status-good' : 
+                                  file.status === 'warning' ? 'status-warning' : 'status-error';
+                
+                const versionStatus = file.versionCheck ? '✅' : '❌';
+                const configStatus = file.configCheck ? '✅' : '❌';
+                
+                tableHTML += `
+                    <tr>
+                        <td><code>${file.filePath}</code></td>
+                        <td class="${statusClass}">${file.status.toUpperCase()}</td>
+                        <td>${versionStatus}</td>
+                        <td>${configStatus}</td>
+                        <td>${file.issues.join(', ') || '无问题'}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            // 添加版本一致性检查
+            if (results.versionConsistency) {
+                tableHTML += `
+                    <h4>🔍 版本一致性检查</h4>
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>依赖</th>
+                                <th>期望版本</th>
+                                <th>发现的版本</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                Object.entries(results.versionConsistency).forEach(([dep, info]) => {
+                    const statusClass = info.consistent ? 'status-good' : 'status-error';
+                    tableHTML += `
+                        <tr>
+                            <td>${dep}</td>
+                            <td>${info.expected}</td>
+                            <td>${info.found.join(', ')}</td>
+                            <td class="${statusClass}">${info.consistent ? '一致' : '不一致'}</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += `
+                        </tbody>
+                    </table>
+                `;
+            }
+            
+            container.innerHTML = tableHTML;
+        }
+
+        // 显示修复建议
+        function displayRecommendations(results) {
+            const container = document.getElementById('recommendationsContainer');
+            
+            if (!results.recommendations || results.recommendations.length === 0) {
+                container.innerHTML = `
+                    <div class="status-good">
+                        <h4>🎉 恭喜！</h4>
+                        <p>所有配置都符合最佳实践，无需修复。</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let recommendationsHTML = '';
+            
+            results.recommendations.forEach((rec, index) => {
+                recommendationsHTML += `
+                    <div class="recommendations">
+                        <h4>建议 ${index + 1}: ${rec.title}</h4>
+                        <p><strong>优先级:</strong> ${rec.priority}</p>
+                        <p><strong>描述:</strong> ${rec.description}</p>
+                        
+                        ${rec.steps && rec.steps.length > 0 ? `
+                            <p><strong>修复步骤:</strong></p>
+                            <ul>
+                                ${rec.steps.map(step => `<li>${step}</li>`).join('')}
+                            </ul>
+                        ` : ''}
+                        
+                        ${rec.codeExample ? `
+                            <p><strong>代码示例:</strong></p>
+                            <div class="code-block">${rec.codeExample}</div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = recommendationsHTML;
+        }
+
+        // 生成报告
+        async function generateReport() {
+            if (!validationResults) {
+                await runFullValidation();
+            }
+            
+            // 这里可以生成更详细的报告
+            console.log('📄 生成详细报告...');
+            
+            const reportData = {
+                timestamp: new Date().toISOString(),
+                summary: {
+                    totalFiles: validationResults.fileResults.length,
+                    passedFiles: validationResults.fileResults.filter(f => f.status === 'passed').length,
+                    failedFiles: validationResults.fileResults.filter(f => f.status === 'failed').length,
+                    overallStatus: validationResults.overallStatus
+                },
+                details: validationResults
+            };
+            
+            console.log('报告数据:', reportData);
+        }
+
+        // 导出报告
+        function exportReport() {
+            if (!validationResults) {
+                alert('请先运行验证');
+                return;
+            }
+            
+            const reportData = JSON.stringify(validationResults, null, 2);
+            const blob = new Blob([reportData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `dependency-validation-report-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // 清空报告
+        function clearReport() {
+            document.getElementById('summaryContainer').innerHTML = '';
+            document.getElementById('detailsContainer').innerHTML = '';
+            document.getElementById('recommendationsContainer').innerHTML = '';
+            validationResults = null;
+        }
+
+        // 将函数暴露到全局作用域
+        window.runFullValidation = runFullValidation;
+        window.generateReport = generateReport;
+        window.exportReport = exportReport;
+        window.clearReport = clearReport;
+
+        // 页面加载完成后自动运行验证
+        console.log('🎯 依赖配置验证报告页面已就绪');
+    </script>
+</body>
+</html>

@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>健身姿态分析 - 测试页面</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .status-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        
+        .status-label {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        .status-value {
+            font-family: 'Monaco', 'Menlo', monospace;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-success { background: #4caf50; }
+        .status-warning { background: #ff9800; }
+        .status-error { background: #f44336; }
+        .status-loading { 
+            background: #2196f3; 
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+        
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .logs {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+        
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .log-timestamp {
+            color: #888;
+            margin-right: 10px;
+        }
+        
+        .log-level {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        .log-error { color: #ff6b6b; }
+        .log-warn { color: #ffa726; }
+        .log-info { color: #42a5f5; }
+        .log-success { color: #66bb6a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏃‍♂️ 健身姿态分析系统</h1>
+            <p>基于 TensorFlow.js 的实时姿态估计与分析</p>
+        </div>
+        
+        <div class="status-panel">
+            <h2>🔧 系统状态</h2>
+            
+            <div class="status-item">
+                <span class="status-label">
+                    <span id="browser-indicator" class="status-indicator status-loading"></span>
+                    浏览器兼容性
+                </span>
+                <span id="browser-status" class="status-value">检查中...</span>
+            </div>
+            
+            <div class="status-item">
+                <span class="status-label">
+                    <span id="worker-indicator" class="status-indicator status-loading"></span>
+                    Web Workers 支持
+                </span>
+                <span id="worker-status" class="status-value">检查中...</span>
+            </div>
+            
+            <div class="status-item">
+                <span class="status-label">
+                    <span id="tensorflow-indicator" class="status-indicator status-loading"></span>
+                    TensorFlow.js 状态
+                </span>
+                <span id="tensorflow-status" class="status-value">检查中...</span>
+            </div>
+            
+            <div class="status-item">
+                <span class="status-label">
+                    <span id="model-indicator" class="status-indicator status-loading"></span>
+                    模型加载状态
+                </span>
+                <span id="model-status" class="status-value">未加载</span>
+            </div>
+            
+            <div class="status-item">
+                <span class="status-label">
+                    <span id="memory-indicator" class="status-indicator status-loading"></span>
+                    内存使用情况
+                </span>
+                <span id="memory-status" class="status-value">检查中...</span>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="init-btn" class="btn">🚀 初始化系统</button>
+            <button id="load-model-btn" class="btn" disabled>📦 加载模型</button>
+            <button id="test-worker-btn" class="btn" disabled>🧪 测试 Worker</button>
+            <button id="clear-logs-btn" class="btn">🗑️ 清除日志</button>
+        </div>
+        
+        <div class="logs" id="logs-container">
+            <div class="log-entry">
+                <span class="log-timestamp">[系统]</span>
+                <span class="log-level log-info">[INFO]</span>
+                <span>测试页面已加载，等待用户操作...</span>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // 日志系统
+        class Logger {
+            constructor(container) {
+                this.container = container;
+            }
+            
+            log(level, message) {
+                const timestamp = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                entry.innerHTML = `
+                    <span class="log-timestamp">[${timestamp}]</span>
+                    <span class="log-level log-${level}">[${level.toUpperCase()}]</span>
+                    <span>${message}</span>
+                `;
+                this.container.appendChild(entry);
+                this.container.scrollTop = this.container.scrollHeight;
+            }
+            
+            info(message) { this.log('info', message); }
+            success(message) { this.log('success', message); }
+            warn(message) { this.log('warn', message); }
+            error(message) { this.log('error', message); }
+            
+            clear() {
+                this.container.innerHTML = '';
+            }
+        }
+        
+        // 状态更新器
+        class StatusUpdater {
+            updateStatus(id, status, message) {
+                const indicator = document.getElementById(`${id}-indicator`);
+                const statusElement = document.getElementById(`${id}-status`);
+                
+                indicator.className = `status-indicator status-${status}`;
+                statusElement.textContent = message;
+            }
+        }
+        
+        // 初始化
+        const logger = new Logger(document.getElementById('logs-container'));
+        const statusUpdater = new StatusUpdater();
+        
+        // 按钮引用
+        const initBtn = document.getElementById('init-btn');
+        const loadModelBtn = document.getElementById('load-model-btn');
+        const testWorkerBtn = document.getElementById('test-worker-btn');
+        const clearLogsBtn = document.getElementById('clear-logs-btn');
+        
+        // 系统检查
+        async function checkSystem() {
+            logger.info('开始系统兼容性检查...');
+            
+            // 检查浏览器兼容性
+            try {
+                const isModernBrowser = 'Worker' in window && 'fetch' in window && 'Promise' in window;
+                if (isModernBrowser) {
+                    statusUpdater.updateStatus('browser', 'success', '兼容 ✓');
+                    logger.success('浏览器兼容性检查通过');
+                } else {
+                    statusUpdater.updateStatus('browser', 'error', '不兼容 ✗');
+                    logger.error('浏览器不支持必要的现代特性');
+                }
+            } catch (error) {
+                statusUpdater.updateStatus('browser', 'error', '检查失败');
+                logger.error(`浏览器检查失败: ${error.message}`);
+            }
+            
+            // 检查 Web Workers
+            try {
+                if (typeof Worker !== 'undefined') {
+                    statusUpdater.updateStatus('worker', 'success', '支持 ✓');
+                    logger.success('Web Workers 支持检查通过');
+                } else {
+                    statusUpdater.updateStatus('worker', 'error', '不支持 ✗');
+                    logger.error('浏览器不支持 Web Workers');
+                }
+            } catch (error) {
+                statusUpdater.updateStatus('worker', 'error', '检查失败');
+                logger.error(`Web Workers 检查失败: ${error.message}`);
+            }
+            
+            // 检查内存
+            try {
+                if (performance.memory) {
+                    const used = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
+                    const total = Math.round(performance.memory.totalJSHeapSize / 1024 / 1024);
+                    statusUpdater.updateStatus('memory', 'success', `${used}MB / ${total}MB`);
+                    logger.info(`内存使用: ${used}MB / ${total}MB`);
+                } else {
+                    statusUpdater.updateStatus('memory', 'warning', '信息不可用');
+                    logger.warn('内存信息不可用');
+                }
+            } catch (error) {
+                statusUpdater.updateStatus('memory', 'error', '检查失败');
+                logger.error(`内存检查失败: ${error.message}`);
+            }
+        }
+        
+        // 初始化系统
+        async function initializeSystem() {
+            logger.info('开始初始化健身姿态分析系统...');
+            initBtn.disabled = true;
+            
+            try {
+                // 动态导入主应用
+                logger.info('正在加载应用模块...');
+                const { PoseEstimationApp } = await import('./src/core/PoseEstimationApp.js');
+                
+                logger.success('应用模块加载成功');
+                
+                // 创建应用实例
+                const app = new PoseEstimationApp();
+                window.poseApp = app;
+                
+                logger.info('正在初始化应用...');
+                await app.initialize();
+                
+                statusUpdater.updateStatus('tensorflow', 'success', '已加载 ✓');
+                logger.success('TensorFlow.js 初始化完成');
+                
+                loadModelBtn.disabled = false;
+                testWorkerBtn.disabled = false;
+                
+                logger.success('🎉 系统初始化完成！');
+                
+            } catch (error) {
+                statusUpdater.updateStatus('tensorflow', 'error', '加载失败 ✗');
+                logger.error(`系统初始化失败: ${error.message}`);
+                console.error('详细错误:', error);
+            } finally {
+                initBtn.disabled = false;
+            }
+        }
+        
+        // 加载模型
+        async function loadModel() {
+            logger.info('开始加载姿态估计模型...');
+            loadModelBtn.disabled = true;
+            
+            try {
+                if (!window.poseApp) {
+                    throw new Error('应用未初始化');
+                }
+                
+                logger.info('正在加载 MoveNet 模型...');
+                await window.poseApp.loadModel('MoveNet');
+                
+                statusUpdater.updateStatus('model', 'success', 'MoveNet 已加载 ✓');
+                logger.success('模型加载完成');
+                
+            } catch (error) {
+                statusUpdater.updateStatus('model', 'error', '加载失败 ✗');
+                logger.error(`模型加载失败: ${error.message}`);
+            } finally {
+                loadModelBtn.disabled = false;
+            }
+        }
+        
+        // 测试 Worker
+        async function testWorker() {
+            logger.info('开始测试 Worker 功能...');
+            testWorkerBtn.disabled = true;
+            
+            try {
+                if (!window.poseApp) {
+                    throw new Error('应用未初始化');
+                }
+                
+                // 创建测试图像数据
+                const canvas = document.createElement('canvas');
+                canvas.width = 640;
+                canvas.height = 480;
+                const ctx = canvas.getContext('2d');
+                
+                // 绘制测试图案
+                ctx.fillStyle = '#4CAF50';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#FFF';
+                ctx.font = '48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('测试图像', canvas.width / 2, canvas.height / 2);
+                
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                logger.info('正在执行姿态估计...');
+                const result = await window.poseApp.predict(imageData);
+                
+                logger.success(`Worker 测试成功！检测到 ${result.poses?.length || 0} 个姿态`);
+                logger.info(`推理时间: ${result.inferenceTime?.toFixed(2) || 'N/A'}ms`);
+                
+            } catch (error) {
+                logger.error(`Worker 测试失败: ${error.message}`);
+            } finally {
+                testWorkerBtn.disabled = false;
+            }
+        }
+        
+        // 事件监听器
+        initBtn.addEventListener('click', initializeSystem);
+        loadModelBtn.addEventListener('click', loadModel);
+        testWorkerBtn.addEventListener('click', testWorker);
+        clearLogsBtn.addEventListener('click', () => {
+            logger.clear();
+            logger.info('日志已清除');
+        });
+        
+        // 全局错误处理
+        window.addEventListener('error', (event) => {
+            logger.error(`全局错误: ${event.error?.message || event.message}`);
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+            logger.error(`未处理的 Promise 拒绝: ${event.reason}`);
+        });
+        
+        // 页面加载完成后执行系统检查
+        document.addEventListener('DOMContentLoaded', checkSystem);
+        
+        // 如果已经加载完成，立即执行
+        if (document.readyState === 'complete') {
+            checkSystem();
+        }
+    </script>
+</body>
+</html>
