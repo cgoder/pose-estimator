@@ -26,7 +26,7 @@ export function getVersionInfo(): {
  * Worker 环境的统一依赖配置
  * 🤖 此文件由构建脚本自动生成，请勿手动编辑
  *
- * 生成时间: 2025-07-12T14:33:50.398Z
+ * 生成时间: 2025-07-12T14:52:04.235Z
  * 生成脚本: scripts/generate-worker-config.js
  * 数据源: src/config/UnifiedDependencyConfig.ts
  */

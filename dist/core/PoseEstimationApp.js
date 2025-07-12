@@ -110,13 +110,12 @@ export class PoseEstimationApp {
             });
             // 注意：根据架构设计，主线程不再加载 TensorFlow.js 依赖
             // TensorFlow.js 推理将完全在 Worker 中进行，避免阻塞 UI 线程
-            console.log('📦 主线程初始化完成，TensorFlow.js 将在 Worker 中按需加载');
+            console.log('📦 主线程初始化完成，TensorFlow.js 将在用户启动推理时按需加载');
             // 环境检查
             await this.performEnvironmentChecks();
-            // 初始化Worker管理器
-            if (this.config?.inference.enableWorker) {
-                await this.initializeWorkerManager();
-            }
+            // 注意：不再在初始化时创建 Worker，而是在用户启动推理时按需创建
+            // 这样可以避免不必要的资源消耗和重复加载问题
+            console.log('⏳ Worker 将在用户启动推理时按需创建');
             // 更新状态 - 加载完成
             stateManager.setState({
                 ui: {
@@ -127,7 +126,7 @@ export class PoseEstimationApp {
                     error: null
                 }
             });
-            console.log('✅ 应用初始化完成，等待用户选择数据源');
+            console.log('✅ 应用初始化完成，等待用户选择数据源和启动推理');
             this.isInitialized = true;
             this.emitAppEvent('initialized');
         }
@@ -550,10 +549,15 @@ export class PoseEstimationApp {
             if (!this.config) {
                 throw new Error('应用配置未初始化');
             }
+            // 按需初始化 Worker 管理器（只有在真正需要推理时才创建）
+            if (!this.workerManager) {
+                console.log('📦 按需创建 Worker 管理器...');
+                await this.initializeWorkerManager();
+            }
             // 严格遵循架构原则：主线程永远不使用 TensorFlow.js
             // 只能通过 Worker 管理器进行推理
             if (!this.workerManager) {
-                throw new Error('Worker 管理器未初始化，无法进行推理。主线程不支持 TensorFlow.js 推理。');
+                throw new Error('Worker 管理器创建失败，无法进行推理。主线程不支持 TensorFlow.js 推理。');
             }
             console.log('📡 使用 Worker 管理器进行推理');
             // Worker 管理器本身就是推理引擎的接口

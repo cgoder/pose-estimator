@@ -128,30 +128,16 @@ async function loadBlazePoseModel(config = {}) {
 // Worker 状态
 let workerInitialized = false;
 let dependenciesLoaded = false;
+let dependenciesLoading = false;
 let poseModel = null;
 let currentModelType = null;
-// 异步加载依赖
-(async () => {
-    try {
-        await loadDependenciesSafely();
-        dependenciesLoaded = true;
-        console.log('✅ Worker 依赖加载完成');
-    }
-    catch (error) {
-        console.error('❌ Worker 依赖加载失败:', error);
-        dependenciesLoaded = false;
-    }
-})();
+console.log('🚀 Pose Worker 已启动，等待初始化指令...');
 /**
  * 消息处理器
  */
 self.onmessage = async function (event) {
     const { id, type, payload } = event.data;
     try {
-        // 检查依赖是否已加载
-        if (!dependenciesLoaded && type !== 'ping') {
-            throw new Error('Worker 依赖尚未加载完成');
-        }
         let result = null;
         switch (type) {
             case 'ping':
@@ -161,9 +147,13 @@ self.onmessage = async function (event) {
                 result = await initializeWorker();
                 break;
             case 'loadModel':
+                // 确保依赖已加载
+                await ensureDependenciesLoaded();
                 result = await loadPoseModel(payload.modelType, payload.config);
                 break;
             case 'predict':
+                // 确保依赖已加载
+                await ensureDependenciesLoaded();
                 result = await predictPose(payload.imageData);
                 break;
             default:
@@ -188,10 +178,48 @@ self.onmessage = async function (event) {
     }
 };
 /**
+ * 确保依赖已加载（按需加载）
+ */
+async function ensureDependenciesLoaded() {
+    // 如果已经加载，直接返回
+    if (dependenciesLoaded) {
+        return;
+    }
+    // 如果正在加载，等待加载完成
+    if (dependenciesLoading) {
+        while (dependenciesLoading) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        if (dependenciesLoaded) {
+            return;
+        }
+        else {
+            throw new Error('依赖加载失败');
+        }
+    }
+    // 开始加载依赖
+    dependenciesLoading = true;
+    try {
+        console.log('🔄 按需加载 Worker 依赖...');
+        await loadDependenciesSafely();
+        dependenciesLoaded = true;
+        console.log('✅ Worker 依赖按需加载完成');
+    }
+    catch (error) {
+        console.error('❌ Worker 依赖按需加载失败:', error);
+        throw error;
+    }
+    finally {
+        dependenciesLoading = false;
+    }
+}
+/**
  * 初始化 Worker
  */
 async function initializeWorker() {
     try {
+        // 确保依赖已加载
+        await ensureDependenciesLoaded();
         console.log('🔧 初始化 TensorFlow.js...');
         // 检查依赖是否可用
         if (typeof tf === 'undefined') {

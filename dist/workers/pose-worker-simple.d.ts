@@ -28,8 +28,13 @@ declare function loadUnifiedDependencyConfig(): Promise<void>;
 declare function loadDependenciesSafely(): Promise<void>;
 declare let workerInitialized: boolean;
 declare let dependenciesLoaded: boolean;
+declare let dependenciesLoading: boolean;
 declare let poseModel: any;
 declare let currentModelType: string | null;
+/**
+ * 确保依赖已加载（按需加载）
+ */
+declare function ensureDependenciesLoaded(): Promise<void>;
 /**
  * 初始化 Worker
  */
