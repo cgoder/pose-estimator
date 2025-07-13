@@ -1897,6 +1897,7 @@ Beta 系数: ${params.beta.toFixed(3)}
         });
         
         console.log('⌨️ 键盘快捷键已启用: Ctrl+H(控制面板), Ctrl+R(重启), Space(暂停), ESC(隐藏)');
+        console.log('⌨️ 性能监控快捷键: Ctrl+Alt+P(性能面板), Ctrl+Alt+E(导出数据), Ctrl+Alt+R(重置统计)');
     }
     
     /**

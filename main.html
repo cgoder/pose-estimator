@@ -10,11 +10,11 @@
     
     <meta name="description" content="基于TensorFlow.js的姿态估计">
     
-    <!-- TensorFlow.js Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+    <!-- TensorFlow.js Scripts - 使用指定版本避免source map 404错误 -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.15.0/dist/tf-core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.15.0/dist/tf-converter.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.15.0/dist/tf-backend-webgl.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
     <script src="oneEuroFilter.js"></script>
 </head>
 <body>
@@ -48,6 +48,6 @@
     </div>
     
     <!-- 主要脚本 - 使用ES6模块 -->
-    <script type="module" src="src/main.js"></script>
+    <script type="module" src="src/main.js?v=2.2"></script>
 </body>
 </html>

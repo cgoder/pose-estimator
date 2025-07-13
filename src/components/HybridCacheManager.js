@@ -1,6 +1,7 @@
 import { CONFIG } from '../utils/constants.js';
 import { ErrorHandler } from '../utils/errorHandling.js';
 import { IndexedDBCacheManager } from './IndexedDBCacheManager.js';
+import { cachePerformanceMonitor } from '../utils/cachePerformanceMonitor.js';
 
 /**
  * 混合缓存管理器
@@ -138,6 +139,7 @@ export class HybridCacheManager {
             // 1. 检查内存缓存（最快）
             if (this.modelInstances.has(cacheKey)) {
                 this.stats.hits++;
+                cachePerformanceMonitor.recordCacheHit('memory', 0);
                 console.log(`🎯 内存缓存命中: ${modelType}`);
                 return this.modelInstances.get(cacheKey);
             }
@@ -152,6 +154,7 @@ export class HybridCacheManager {
                     if (model) {
                         console.log(`✅ IndexedDB 缓存命中: ${modelType}`);
                         this.stats.hits++;
+                        cachePerformanceMonitor.recordCacheHit('indexeddb', 0);
                         this.modelInstances.set(cacheKey, model);
                         return model;
                     }
@@ -171,6 +174,7 @@ export class HybridCacheManager {
             
             const loadTime = performance.now() - startTime;
             console.log(`✅ 模型加载完成: ${modelType} (${loadTime.toFixed(1)}ms)`);
+            cachePerformanceMonitor.recordCacheMiss(loadTime);
 
             // 4. 存储到内存缓存和元数据缓存
             this.modelInstances.set(cacheKey, model);
@@ -193,6 +197,7 @@ export class HybridCacheManager {
 
         } catch (error) {
             this.stats.misses++;
+            cachePerformanceMonitor.recordError(error);
             throw ErrorHandler.createError('HybridCache', `混合缓存操作失败: ${error.message}`, error);
         }
     }
