@@ -186,12 +186,18 @@ class PoseEstimationApp {
         // 调试信息：检查 uiManager 对象
         console.log('🔍 调试信息 - uiManager:', uiManager);
         
-        // 直接使用函数调用语法，避免可能的属性访问问题
+        // 设置PoseEstimator实例引用到UIManager
         try {
-            // 设置PoseEstimator实例引用到UIManager
             if (uiManager && this.poseEstimator) {
-                // 使用原型方法直接调用
-                Object.getPrototypeOf(uiManager).setPoseEstimator.call(uiManager, this.poseEstimator);
+                // 直接设置属性，然后调用方法
+                uiManager.poseEstimator = this.poseEstimator;
+                
+                // 如果有摄像头切换按钮，更新其状态
+                if (uiManager.cameraSwitchButton && this.poseEstimator.getCurrentFacingMode) {
+                    const currentMode = this.poseEstimator.getCurrentFacingMode();
+                    uiManager.updateCameraSwitchButton(currentMode);
+                }
+                
                 console.log('✅ 成功设置 PoseEstimator 实例到 UIManager');
             } else {
                 console.warn('⚠️ uiManager 或 poseEstimator 不存在');
@@ -298,7 +304,13 @@ class PoseEstimationApp {
             this.createPoseEstimator();
             
             // 更新UIManager的PoseEstimator引用
-            uiManager.setPoseEstimator(this.poseEstimator);
+            uiManager.poseEstimator = this.poseEstimator;
+            
+            // 如果有摄像头切换按钮，更新其状态
+            if (uiManager.cameraSwitchButton && this.poseEstimator.getCurrentFacingMode) {
+                const currentMode = this.poseEstimator.getCurrentFacingMode();
+                uiManager.updateCameraSwitchButton(currentMode);
+            }
             
             // 重新启动
             await this.poseEstimator.start();
