@@ -3,6 +3,8 @@
  * 负责姿态检测结果的可视化渲染和UI更新
  */
 import { PoseEstimationResult, AnalysisResult, Renderer, RenderEngine, RenderEngineConfig, ExtendedRenderData } from '../types/index.js';
+import type { InputSourceType } from '../utils/IntelligentFrameRateController.js';
+import { ScenarioType } from '../utils/IntelligentKeypointStabilizer.js';
 /**
  * Canvas渲染引擎实现
  */
@@ -14,9 +16,10 @@ export declare class CanvasRenderEngine implements RenderEngine {
     private _isInitialized;
     private offscreenCanvas;
     private offscreenCtx;
-    private lastRenderTime;
-    private renderThrottle;
     private imageCache;
+    private currentInputSource;
+    private stabilizationEnabled;
+    private currentScenario;
     private defaultConfig;
     /**
      * 检查是否已初始化
@@ -43,11 +46,52 @@ export declare class CanvasRenderEngine implements RenderEngine {
      */
     updateConfig(config: Partial<RenderEngineConfig>): void;
     /**
+     * 设置输入源类型（用于智能帧率控制）
+     */
+    setInputSource(sourceType: InputSourceType): void;
+    /**
+     * 获取当前输入源类型
+     */
+    getCurrentInputSource(): InputSourceType;
+    /**
+     * 获取当前性能统计
+     */
+    getPerformanceStats(): {
+        current: import("../utils/IntelligentFrameRateController.js").PerformanceMetrics | null;
+        average: import("../utils/IntelligentFrameRateController.js").PerformanceMetrics | null;
+        config: import("../utils/IntelligentFrameRateController.js").FrameRateConfig;
+        deviceInfo: string;
+    };
+    /**
+     * 重置性能统计
+     */
+    resetPerformanceStats(): void;
+    /**
+     * 应用关键点稳定
+     */
+    private applyKeypointStabilization;
+    /**
+     * 设置关键点稳定场景
+     */
+    setStabilizationScenario(scenario: ScenarioType): void;
+    /**
+     * 获取当前关键点稳定场景
+     */
+    getCurrentScenario(): ScenarioType;
+    /**
+     * 启用/禁用关键点稳定
+     */
+    setStabilizationEnabled(enabled: boolean): void;
+    /**
+     * 获取关键点稳定统计
+     */
+    getStabilizationStats(): any;
+    /**
      * 清空画布
      */
     clear(): void;
     /**
-     * 调整画布大小
+     * 调整画布尺寸
      */
     resize(width: number, height: number): void;
     /**
@@ -94,10 +138,6 @@ export declare class CanvasRenderEngine implements RenderEngine {
      * 设置Canvas上下文样式
      */
     private setupCanvasContext;
-    /**
-     * 渲染无检测状态
-     */
-    private renderNoDetection;
     /**
      * 获取骨骼连接定义
      */

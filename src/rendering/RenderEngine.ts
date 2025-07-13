@@ -35,6 +35,10 @@ export class CanvasRenderEngine implements RenderEngine {
   private lastRenderTime: number = 0;
   private renderThrottle: number = 16; // 约60fps
   private imageCache: Map<string, ImageBitmap> = new Map();
+  
+  // 渲染状态防抖
+  private noDetectionFrameCount: number = 0;
+  private readonly NO_DETECTION_THRESHOLD = 3; // 连续3帧无检测才显示提示
 
   // 默认配置
   private defaultConfig: RenderConfig = {
@@ -122,12 +126,15 @@ export class CanvasRenderEngine implements RenderEngine {
       return;
     }
 
-    // 帧率控制
-    const now = performance.now();
-    if (now - this.lastRenderTime < this.renderThrottle) {
-      return;
+    // 帧率控制 - 对于静态图像，跳过帧率限制
+    const isStaticImage = !data.frame || data.frame.timestamp === 0;
+    if (!isStaticImage) {
+      const now = performance.now();
+      if (now - this.lastRenderTime < this.renderThrottle) {
+        return;
+      }
+      this.lastRenderTime = now;
     }
-    this.lastRenderTime = now;
 
     try {
       // 如果有设置的渲染器，使用渲染器
@@ -153,15 +160,32 @@ export class CanvasRenderEngine implements RenderEngine {
         this.renderVideoFrameOptimized(data.frame.imageData, renderCtx, renderCanvas);
       }
 
-      // 渲染姿态数据
-      if (data.poses.length > 0) {
-        this.renderPosesOptimized(data.poses, renderCtx);
+      // 检查是否有有效的姿态数据
+      const validPoses = data.poses.filter(pose => 
+        pose.keypoints && 
+        pose.keypoints.length > 0 && 
+        pose.keypoints.some(kp => kp.score > (this.defaultConfig.confidenceThreshold || 0.3))
+      );
+
+      const hasValidPoses = validPoses.length > 0;
+
+      // 更新防抖状态
+      if (hasValidPoses) {
+        this.noDetectionFrameCount = 0;
       } else {
+        this.noDetectionFrameCount++;
+      }
+
+      // 渲染姿态数据
+      if (hasValidPoses) {
+        this.renderPosesOptimized(validPoses, renderCtx);
+      } else if (data.frame && data.frame.imageData && this.noDetectionFrameCount >= this.NO_DETECTION_THRESHOLD) {
+        // 只有连续多帧无检测且有真实视频帧时才显示"未检测到姿态"
         this.renderNoDetection(renderCtx);
       }
 
-      // 渲染分析结果
-      if (data.analysis) {
+      // 渲染分析结果（只有在有有效姿态时才渲染）
+      if (data.analysis && hasValidPoses) {
         this.renderAnalysisOptimized(data.analysis, renderCtx, renderCanvas);
       }
 
@@ -175,13 +199,19 @@ export class CanvasRenderEngine implements RenderEngine {
 
       // 如果使用双缓冲，将离屏Canvas绘制到主Canvas
       if (this.offscreenCanvas && this.offscreenCtx) {
+        // 使用更平滑的复制方式
+        this.ctx.save();
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.imageSmoothingQuality = 'high';
         this.ctx.drawImage(this.offscreenCanvas, 0, 0);
+        this.ctx.restore();
       }
 
       eventBus.emit('render:frame', data);
 
     } catch (error) {
+      console.error('渲染错误:', error);
       eventBus.emit('render:error', { 
         error: error instanceof Error ? error.message : '渲染失败' 
       });
@@ -192,6 +222,22 @@ export class CanvasRenderEngine implements RenderEngine {
    * 渲染数据（兼容性方法）
    */
   renderPoseResult(poseResult: PoseEstimationResult, analysisResult?: AnalysisResult): void {
+    // 检查是否有有效的姿态数据
+    const hasValidPoses = poseResult.poses && poseResult.poses.length > 0 && 
+      poseResult.poses.some(pose => 
+        pose.keypoints && 
+        pose.keypoints.length > 0 && 
+        pose.keypoints.some(kp => kp.score > (this.defaultConfig.confidenceThreshold || 0.3))
+      );
+
+    // 如果没有有效姿态，直接清空画布并返回
+    if (!hasValidPoses) {
+      if (this.canvas && this.ctx) {
+        this.clearCanvas(this.ctx, this.canvas);
+      }
+      return;
+    }
+
     const renderData: RenderData = {
       frame: {
         imageData: new ImageData(this.canvas?.width || 640, this.canvas?.height || 480),
@@ -199,7 +245,7 @@ export class CanvasRenderEngine implements RenderEngine {
         height: this.canvas?.height || 480,
         timestamp: Date.now()
       },
-      poses: poseResult.poses,
+      poses: poseResult.poses || [],
       ...(analysisResult && { analysis: analysisResult }),
       config: {
         showKeypoints: this.defaultConfig.showKeypoints,
@@ -378,63 +424,149 @@ export class CanvasRenderEngine implements RenderEngine {
    */
   private renderSkeletonOptimized(keypoints: Keypoint[], ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): void {
     const connections = this.getSkeletonConnections();
+    const confidenceThreshold = this.defaultConfig.confidenceThreshold || 0.3;
     
-    // 批量开始路径
-    ctx.beginPath();
-    ctx.strokeStyle = this.defaultConfig.colors.skeleton;
-    ctx.lineWidth = this.defaultConfig.skeletonLineWidth;
-
+    // 预过滤有效连接，减少重复计算
+    const validConnections: Array<{start: Keypoint, end: Keypoint, confidence: number}> = [];
+    
     for (const [startName, endName] of connections) {
       const startPoint = this.findKeypoint(keypoints, startName);
       const endPoint = this.findKeypoint(keypoints, endName);
 
       if (startPoint && endPoint && 
-          startPoint.score > (this.defaultConfig.confidenceThreshold || 0.3) && 
-          endPoint.score > (this.defaultConfig.confidenceThreshold || 0.3)) {
+          startPoint.score > confidenceThreshold && 
+          endPoint.score > confidenceThreshold) {
         
-        ctx.moveTo(startPoint.x, startPoint.y);
-        ctx.lineTo(endPoint.x, endPoint.y);
+        // 计算连接的平均置信度
+        const avgConfidence = (startPoint.score + endPoint.score) / 2;
+        validConnections.push({
+          start: startPoint,
+          end: endPoint,
+          confidence: avgConfidence
+        });
       }
     }
-    
-    // 批量绘制所有线条
-    ctx.stroke();
+
+    if (validConnections.length === 0) return;
+
+    // 设置绘制样式
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = this.defaultConfig.colors.skeleton;
+    ctx.lineWidth = this.defaultConfig.skeletonLineWidth;
+
+    // 按置信度分组绘制，减少样式切换
+    const highConfidenceConnections = validConnections.filter(conn => conn.confidence > 0.7);
+    const mediumConfidenceConnections = validConnections.filter(conn => conn.confidence > 0.5 && conn.confidence <= 0.7);
+    const lowConfidenceConnections = validConnections.filter(conn => conn.confidence <= 0.5);
+
+    // 绘制高置信度连接（不透明）
+    if (highConfidenceConnections.length > 0) {
+      ctx.globalAlpha = 1.0;
+      ctx.beginPath();
+      for (const conn of highConfidenceConnections) {
+        ctx.moveTo(conn.start.x, conn.start.y);
+        ctx.lineTo(conn.end.x, conn.end.y);
+      }
+      ctx.stroke();
+    }
+
+    // 绘制中等置信度连接（半透明）
+    if (mediumConfidenceConnections.length > 0) {
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      for (const conn of mediumConfidenceConnections) {
+        ctx.moveTo(conn.start.x, conn.start.y);
+        ctx.lineTo(conn.end.x, conn.end.y);
+      }
+      ctx.stroke();
+    }
+
+    // 绘制低置信度连接（更透明）
+    if (lowConfidenceConnections.length > 0) {
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      for (const conn of lowConfidenceConnections) {
+        ctx.moveTo(conn.start.x, conn.start.y);
+        ctx.lineTo(conn.end.x, conn.end.y);
+      }
+      ctx.stroke();
+    }
+
+    // 恢复透明度
+    ctx.globalAlpha = 1.0;
   }
 
   /**
    * 优化的关键点渲染
    */
   private renderKeypointsOptimized(keypoints: Keypoint[], ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): void {
-    // 按置信度分组关键点以减少样式切换
-    const validKeypoints = keypoints.filter(kp => kp.score > (this.defaultConfig.confidenceThreshold || 0.3));
+    const confidenceThreshold = this.defaultConfig.confidenceThreshold || 0.3;
     
-    if (validKeypoints.length === 0) return;
-
-    // 批量绘制关键点
-    ctx.beginPath();
-    for (const keypoint of validKeypoints) {
-      ctx.moveTo(keypoint.x + this.defaultConfig.keypointRadius, keypoint.y);
-      ctx.arc(keypoint.x, keypoint.y, this.defaultConfig.keypointRadius, 0, 2 * Math.PI);
-    }
+    // 按置信度分组关键点
+    const highConfidencePoints = keypoints.filter(kp => kp.score > 0.8);
+    const mediumConfidencePoints = keypoints.filter(kp => kp.score > 0.6 && kp.score <= 0.8);
+    const lowConfidencePoints = keypoints.filter(kp => kp.score > confidenceThreshold && kp.score <= 0.6);
     
-    // 根据置信度设置颜色
-    const avgConfidence = validKeypoints.reduce((sum, kp) => sum + kp.score, 0) / validKeypoints.length;
-    const alpha = Math.min(1, avgConfidence * 1.5);
-    ctx.fillStyle = this.hexToRgba(this.defaultConfig.colors.keypoint, alpha);
-    ctx.fill();
+    // 设置绘制样式
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-    // 可选：渲染关键点标签（仅在需要时）
-    if (this.defaultConfig.showConfidence && validKeypoints.length <= 5) { // 限制标签数量
-      ctx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
-      ctx.font = `${this.defaultConfig.fontSize}px ${this.defaultConfig.fontFamily}`;
-      
-      for (const keypoint of validKeypoints) {
-        ctx.fillText(
-          `${(keypoint.score * 100).toFixed(0)}%`,
-          keypoint.x + this.defaultConfig.keypointRadius + 2,
-          keypoint.y - this.defaultConfig.keypointRadius
-        );
+    // 绘制高置信度关键点（最亮）
+    if (highConfidencePoints.length > 0) {
+      ctx.globalAlpha = 1.0;
+      ctx.fillStyle = this.defaultConfig.colors.keypoint;
+      ctx.beginPath();
+      for (const keypoint of highConfidencePoints) {
+        ctx.moveTo(keypoint.x + this.defaultConfig.keypointRadius, keypoint.y);
+        ctx.arc(keypoint.x, keypoint.y, this.defaultConfig.keypointRadius, 0, 2 * Math.PI);
       }
+      ctx.fill();
+    }
+
+    // 绘制中等置信度关键点（半透明）
+    if (mediumConfidencePoints.length > 0) {
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = this.defaultConfig.colors.keypoint;
+      ctx.beginPath();
+      for (const keypoint of mediumConfidencePoints) {
+        ctx.moveTo(keypoint.x + this.defaultConfig.keypointRadius, keypoint.y);
+        ctx.arc(keypoint.x, keypoint.y, this.defaultConfig.keypointRadius, 0, 2 * Math.PI);
+      }
+      ctx.fill();
+    }
+
+    // 绘制低置信度关键点（更透明）
+    if (lowConfidencePoints.length > 0) {
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = this.defaultConfig.colors.keypoint;
+      ctx.beginPath();
+      for (const keypoint of lowConfidencePoints) {
+        ctx.moveTo(keypoint.x + this.defaultConfig.keypointRadius * 0.8, keypoint.y);
+        ctx.arc(keypoint.x, keypoint.y, this.defaultConfig.keypointRadius * 0.8, 0, 2 * Math.PI);
+      }
+      ctx.fill();
+    }
+
+    // 恢复透明度
+    ctx.globalAlpha = 1.0;
+
+    // 可选：渲染关键点标签（仅在高置信度且数量少时）
+    if (this.defaultConfig.showConfidence && highConfidencePoints.length <= 8) {
+      ctx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
+      ctx.font = `${(this.defaultConfig.fontSize || 14) - 2}px ${this.defaultConfig.fontFamily}`;
+       ctx.textAlign = 'center';
+       
+       for (const keypoint of highConfidencePoints) {
+         const confidence = Math.round(keypoint.score * 100);
+         ctx.fillStyle = this.hexToRgba(this.defaultConfig.colors.text || '#FFFFFF', 0.9);
+         ctx.fillText(
+           `${confidence}%`,
+           keypoint.x,
+           keypoint.y - this.defaultConfig.keypointRadius - 2
+         );
+       }
+      ctx.textAlign = 'left'; // 恢复默认对齐
     }
   }
 
@@ -566,9 +698,39 @@ export class CanvasRenderEngine implements RenderEngine {
     const renderCtx = ctx || this.ctx;
     if (!renderCtx || !this.canvas) return;
 
+    // 只在画布中心显示，并且使用半透明背景
+    const centerX = this.canvas.width / 2;
+    const centerY = this.canvas.height / 2;
+    const text = '未检测到姿态';
+    
+    // 设置字体
+    const fontSize = (this.defaultConfig.fontSize || 14) + 4;
+    renderCtx.font = `${fontSize}px ${this.defaultConfig.fontFamily}`;
+    
+    // 测量文本尺寸
+    const textMetrics = renderCtx.measureText(text);
+    const textWidth = textMetrics.width;
+    const textHeight = fontSize;
+    
+    // 绘制半透明背景
+    renderCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    const padding = 10;
+    renderCtx.fillRect(
+      centerX - textWidth / 2 - padding,
+      centerY - textHeight / 2 - padding,
+      textWidth + padding * 2,
+      textHeight + padding * 2
+    );
+    
+    // 绘制文本
     renderCtx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
-    renderCtx.font = `${(this.defaultConfig.fontSize || 14) + 2}px ${this.defaultConfig.fontFamily}`;
-    renderCtx.fillText('未检测到姿态', this.canvas.width / 2 - 60, this.canvas.height / 2);
+    renderCtx.textAlign = 'center';
+    renderCtx.textBaseline = 'middle';
+    renderCtx.fillText(text, centerX, centerY);
+    
+    // 恢复默认设置
+    renderCtx.textAlign = 'left';
+    renderCtx.textBaseline = 'alphabetic';
   }
 
   /**
