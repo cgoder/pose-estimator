@@ -163,7 +163,12 @@ export class TensorFlowWorkerManager implements WorkerManagerInterface {
         payload: { imageData }
       });
 
-      return response.result;
+      // 确保返回的数据包含必要的字段
+      if (!response || !response.poses) {
+        throw new Error('Worker 返回的推理结果格式不正确');
+      }
+
+      return response;
 
     } catch (error) {
       this.emit('error', error);

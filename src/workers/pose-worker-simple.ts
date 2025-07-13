@@ -124,32 +124,35 @@ async function loadDependenciesSafely(): Promise<void> {
 
 // 内联模型加载器（来自 shared-model-loaders.js）
 async function loadMoveNetModel(config: any = {}) {
+  // 过滤掉可能导致冲突的字段，只保留 MoveNet 需要的配置
   const modelConfig = {
-    modelType: config.modelType || poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-    enableSmoothing: config.enableSmoothing || false,
-    ...config
+    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+    enableSmoothing: config.enableSmoothing || false
+    // 注意：不传递 type、backend 等字段，避免与 TensorFlow.js 内部字段冲突
   };
   return await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, modelConfig);
 }
 
 async function loadPoseNetModel(config: any = {}) {
+  // 过滤掉可能导致冲突的字段，只保留 PoseNet 需要的配置
   const modelConfig = {
     architecture: config.architecture || 'MobileNetV1',
     outputStride: config.outputStride || 16,
     inputResolution: config.inputResolution || { width: 513, height: 513 },
     multiplier: config.multiplier || 0.75,
-    quantBytes: config.quantBytes || 2,
-    ...config
+    quantBytes: config.quantBytes || 2
+    // 注意：不传递 type、backend 等字段
   };
   return await poseDetection.createDetector(poseDetection.SupportedModels.PoseNet, modelConfig);
 }
 
 async function loadBlazePoseModel(config: any = {}) {
+  // 过滤掉可能导致冲突的字段，只保留 BlazePose 需要的配置
   const modelConfig = {
     runtime: config.runtime || 'tfjs',
     enableSmoothing: config.enableSmoothing || false,
-    modelType: config.modelType || 'full',
-    ...config
+    modelType: config.blazePoseModelType || 'full'
+    // 注意：不传递 type、backend 等字段
   };
   return await poseDetection.createDetector(poseDetection.SupportedModels.BlazePose, modelConfig);
 }
@@ -384,11 +387,16 @@ async function predictPose(imageData: ImageData): Promise<any> {
     
     const inferenceTime = performance.now() - startTime;
     
+    // 返回符合 PoseEstimationResult 接口的数据
     return {
       poses,
       inferenceTime,
+      timestamp: Date.now(),
       modelType: currentModelType,
-      timestamp: Date.now()
+      inputDimensions: {
+        width: imageData.width,
+        height: imageData.height
+      }
     };
 
   } catch (error) {

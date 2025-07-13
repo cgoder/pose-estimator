@@ -121,15 +121,15 @@ export class UIController {
 
     // 模型选择按钮
     document.getElementById('btn-movenet')?.addEventListener('click', () => {
-      this.handleModelSelection('movenet');
+      this.handleModelSelection('MoveNet');
     });
 
     document.getElementById('btn-posenet')?.addEventListener('click', () => {
-      this.handleModelSelection('posenet');
+      this.handleModelSelection('PoseNet');
     });
 
     document.getElementById('btn-blazepose')?.addEventListener('click', () => {
-      this.handleModelSelection('blazepose');
+      this.handleModelSelection('BlazePose');
     });
 
     // 控制按钮
@@ -173,13 +173,13 @@ export class UIController {
       this.showError(error.message || '未知错误');
     });
 
-    eventBus.on('app:dataSourceChanged', (type) => {
-      this.updateDataSource(type);
+    eventBus.on('app:data-source-ready', (eventData) => {
+      this.updateDataSource(eventData.data.type);
       this.enableStartButton();
     });
 
-    eventBus.on('app:modelChanged', (modelType) => {
-      this.updateCurrentModel(modelType);
+    eventBus.on('app:model-loaded', (eventData) => {
+      this.updateCurrentModel(eventData.data.modelType);
     });
 
     // 监听状态变更

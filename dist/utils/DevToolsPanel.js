@@ -673,7 +673,30 @@ export class DevToolsPanel {
         const container = this.container?.querySelector('#performance-stats');
         if (!container)
             return;
-        // 这里可以集成 PerformanceProfiler 的数据
+        // 从全局性能监控器获取实际数据
+        if (typeof window !== 'undefined' && window.poseApp) {
+            const app = window.poseApp;
+            const metrics = app.getPerformanceMetrics?.();
+            if (metrics) {
+                const performanceHtml = `
+          <div class="metric-item">
+            <span class="metric-label">FPS</span>
+            <span class="metric-value">${metrics.frameRate?.toString() || '--'}</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">推理时间</span>
+            <span class="metric-value">${metrics.inferenceTime?.toFixed(1) || '--'}ms</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">平均帧时间</span>
+            <span class="metric-value">${metrics.averageFrameTime?.toFixed(1) || '--'}ms</span>
+          </div>
+        `;
+                container.innerHTML = performanceHtml;
+                return;
+            }
+        }
+        // 使用模拟数据作为后备
         const performanceHtml = `
       <div class="metric-item">
         <span class="metric-label">FPS</span>

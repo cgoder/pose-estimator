@@ -3,7 +3,7 @@
  * Worker 环境的统一依赖配置
  * 🤖 此文件由构建脚本自动生成，请勿手动编辑
  *
- * 生成时间: 2025-07-12T14:52:04.235Z
+ * 生成时间: 2025-07-13T01:01:54.079Z
  * 生成脚本: scripts/generate-worker-config.js
  * 数据源: src/config/UnifiedDependencyConfig.ts
  */
@@ -40,7 +40,7 @@ function getVersionInfo() {
     return {
         tensorflow: TENSORFLOW_VERSION,
         poseDetection: POSE_DETECTION_VERSION,
-        generatedAt: '2025-07-12T14:52:04.236Z'
+        generatedAt: '2025-07-13T01:01:54.080Z'
     };
 }
 // 导出配置（Worker 环境使用）

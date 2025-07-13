@@ -14,6 +14,8 @@ import {
 } from '../types/index.js';
 import { eventBus } from './EventBus.js';
 import { stateManager } from './StateManager.js';
+import { CodeQualityChecker } from '../utils/CodeQualityChecker.js';
+import { PerformanceMonitor } from '../utils/PerformanceMonitor.js';
 import { dataSourceFactory } from './dataSources/DataSourceFactory.js';
 // 只在回退模式下动态导入 TensorFlowInferenceEngine
 // import { TensorFlowInferenceEngine } from '../inference/InferenceEngine.js';
@@ -35,12 +37,194 @@ export class PoseEstimationApp {
   private isInitialized: boolean = false;
   private isRunning: boolean = false;
   private config: AppConfig | null = null;
+  
+  // 性能优化：帧率控制
+  private lastInferenceTime: number = 0;
+  private targetInferenceInterval: number = 100; // 10fps 推理频率 (100ms间隔)
+  private frameSkipCount: number = 0;
+  private maxFrameSkip: number = 2; // 最多跳过2帧
+  
+  private errorRecoveryAttempts = new Map<string, number>();
+  private readonly maxRecoveryAttempts = 3;
+  private readonly recoveryDelay = 1000; // 1秒
+  
+  // 质量监控实例
+  private qualityChecker: CodeQualityChecker;
+  private performanceMonitor: PerformanceMonitor;
+
+  /**
+   * 智能错误恢复
+   */
+  private async handleErrorWithRecovery(error: Error, context: string): Promise<boolean> {
+    const errorKey = `${context}:${error.message}`;
+    const attempts = this.errorRecoveryAttempts.get(errorKey) || 0;
+    
+    if (attempts >= this.maxRecoveryAttempts) {
+      console.error(`❌ ${context} 错误恢复失败，已达到最大重试次数:`, error);
+      this.emitAppEvent('error', { 
+        message: `${context} 错误恢复失败`, 
+        error,
+        recoverable: false
+      });
+      return false;
+    }
+
+    this.errorRecoveryAttempts.set(errorKey, attempts + 1);
+    console.warn(`🔄 尝试恢复 ${context} 错误 (第${attempts + 1}次):`, error.message);
+
+    try {
+      // 等待一段时间后重试
+      await new Promise(resolve => setTimeout(resolve, this.recoveryDelay * (attempts + 1)));
+
+      // 根据错误类型执行不同的恢复策略
+      switch (context) {
+        case 'inference':
+          return await this.recoverInferenceEngine();
+        
+        case 'worker':
+          return await this.recoverWorkerManager();
+        
+        case 'dataSource':
+          return await this.recoverDataSource();
+        
+        case 'render':
+          return await this.recoverRenderEngine();
+        
+        default:
+          return false;
+      }
+    } catch (recoveryError) {
+      console.error(`❌ ${context} 恢复过程中发生错误:`, recoveryError);
+      return false;
+    }
+  }
+
+  /**
+   * 恢复推理引擎
+   */
+  private async recoverInferenceEngine(): Promise<boolean> {
+    try {
+      console.log('🔄 尝试重新初始化推理引擎...');
+      
+      // 清理现有推理引擎
+      if (this.inferenceEngine) {
+        await this.inferenceEngine.dispose();
+        this.inferenceEngine = null;
+      }
+
+      // 重新初始化
+      await this.initializeInferenceEngine();
+      
+      console.log('✅ 推理引擎恢复成功');
+      return true;
+    } catch (error) {
+      console.error('❌ 推理引擎恢复失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 恢复 Worker 管理器
+   */
+  private async recoverWorkerManager(): Promise<boolean> {
+    try {
+      console.log('🔄 尝试重新初始化 Worker 管理器...');
+      
+      // 清理现有 Worker
+      if (this.workerManager) {
+        await this.workerManager.dispose();
+        this.workerManager = null;
+      }
+
+      // 重新初始化
+      await this.initializeWorkerManager();
+      
+      console.log('✅ Worker 管理器恢复成功');
+      return true;
+    } catch (error) {
+      console.error('❌ Worker 管理器恢复失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 恢复数据源
+   */
+  private async recoverDataSource(): Promise<boolean> {
+    try {
+      console.log('🔄 尝试重新启动数据源...');
+      
+      if (this.dataSource) {
+        // 停止当前数据源
+        await this.dataSource.stop();
+        
+        // 重新启动
+        await this.dataSource.start();
+        
+        console.log('✅ 数据源恢复成功');
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('❌ 数据源恢复失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 恢复渲染引擎
+   */
+  private async recoverRenderEngine(): Promise<boolean> {
+    try {
+      console.log('🔄 尝试重新初始化渲染引擎...');
+      
+      // 清理现有渲染引擎
+      if (this.renderEngine) {
+        this.renderEngine.dispose();
+        this.renderEngine = null;
+      }
+
+      // 重新初始化
+      await this.initializeRenderEngine();
+      
+      console.log('✅ 渲染引擎恢复成功');
+      return true;
+    } catch (error) {
+      console.error('❌ 渲染引擎恢复失败:', error);
+      return false;
+    }
+  }
 
   constructor(config?: Partial<AppConfig>) {
     this.setupEventListeners();
     
     // 设置默认配置
     this.config = this.mergeWithDefaultConfig(config);
+    
+    // 初始化质量监控
+    this.qualityChecker = new CodeQualityChecker({
+      enableMemoryLeakDetection: true,
+      enablePerformanceMonitoring: true,
+      enableErrorPatternAnalysis: true,
+      enableSecurityChecks: true,
+      checkInterval: 30000, // 30秒检查一次
+      memoryThreshold: 100 * 1024 * 1024, // 100MB
+      performanceThreshold: 1000 // 1秒
+    });
+
+    this.performanceMonitor = new PerformanceMonitor();
+
+    // 监听质量检查事件
+    eventBus.on('code-quality-warning', (data) => {
+      console.warn('⚠️ 代码质量警告:', data);
+      // 发射应用事件（暂时注释，需要在类型定义中添加）
+      // this.emitAppEvent('quality-warning', data);
+    });
+
+    // 启动质量检查（默认启用）
+    this.qualityChecker.startChecking();
+    this.performanceMonitor.reset();
     
     console.log('🚀 PoseEstimationApp (重构版) 已创建');
   }
@@ -211,6 +395,14 @@ export class PoseEstimationApp {
 
       // 绑定数据源事件
       this.bindDataSourceEvents();
+
+      // 立即初始化渲染引擎以显示画面
+      if (!this.renderEngine) {
+        await this.initializeRenderEngine();
+      }
+
+      // 启动数据源以开始获取画面
+      await this.dataSource.start();
 
       // 更新状态
       stateManager.setState({
@@ -477,63 +669,152 @@ export class PoseEstimationApp {
    * 处理图像帧
    */
   private async processFrame(imageData: ImageData): Promise<void> {
+    const frameStartTime = performance.now();
+    
     try {
-      if (!this.isRunning || !this.inferenceEngine || !this.analysisEngine || !this.renderEngine) {
-        return;
-      }
-
-      const startTime = performance.now();
-
-      // 1. AI推理
-      const inferenceResult = await this.inferenceEngine.predict(imageData);
-      this.emitAppEvent('inference-complete', inferenceResult);
-
-      // 2. 分析计算
-      const analysisResult = this.analysisEngine.analyze(inferenceResult.poses);
-      this.emitAppEvent('analysis-complete', analysisResult);
-
-      // 3. 渲染输出
-      const renderData: ExtendedRenderData = {
-        frame: {
-          imageData: imageData,
-          width: imageData.width,
-          height: imageData.height,
-          timestamp: Date.now()
-        },
-        poses: inferenceResult.poses,
-        analysis: analysisResult,
-        config: {
-          showKeypoints: this.config?.render.showKeypoints || true,
-          showSkeleton: this.config?.render.showSkeleton || true,
-          showConfidence: this.config?.render.showConfidence || false,
-          showBoundingBox: this.config?.render.showBoundingBox || false,
-          showAnalysis: this.config?.render.showAnalysis || false,
-          showPerformance: this.config?.render.showPerformance || false,
-          keypointRadius: 4,
-          skeletonLineWidth: 2,
-          colors: {
-            keypoint: '#00ff00',
-            skeleton: '#ff0000',
-            confidence: '#0000ff'
+      // 如果渲染引擎可用，总是显示原始画面
+      if (this.renderEngine) {
+        // 创建基础渲染数据以显示原始画面
+        const basicRenderData: ExtendedRenderData = {
+          frame: {
+            imageData: imageData,
+            width: imageData.width,
+            height: imageData.height,
+            timestamp: Date.now()
+          },
+          poses: [], // 没有推理时为空
+          config: {
+            showKeypoints: false, // 没有推理时不显示关键点
+            showSkeleton: false, // 没有推理时不显示骨骼
+            showConfidence: false,
+            showBoundingBox: false,
+            showAnalysis: false,
+            showPerformance: false,
+            keypointRadius: 4,
+            skeletonLineWidth: 2,
+            colors: {
+              keypoint: '#00ff00',
+              skeleton: '#ff0000',
+              confidence: '#0000ff'
+            }
+          },
+          performance: {
+            frameRate: 0,
+            averageFrameTime: 0,
+            inferenceTime: 0,
+            memoryUsage: this.getMemoryUsage(),
+            cacheHitRate: 0,
+            totalFrames: 0,
+            droppedFrames: 0
           }
-        },
-        performance: {
-          frameRate: Math.round(1000 / (performance.now() - startTime)),
-          averageFrameTime: performance.now() - startTime,
-          inferenceTime: inferenceResult.inferenceTime,
-          memoryUsage: { used: 0, total: 0, limit: 0 },
-          cacheHitRate: 0,
-          totalFrames: 0,
-          droppedFrames: 0
+        };
+
+        // 性能优化：智能推理控制
+        const currentTime = performance.now();
+        const shouldRunInference = this.shouldRunInference(currentTime);
+
+        // 如果应用正在运行且推理引擎可用，进行AI推理和分析
+        if (this.isRunning && this.inferenceEngine && this.analysisEngine && shouldRunInference) {
+          // 性能监控：推理开始
+          const inferenceStartTime = performance.now();
+
+          try {
+            // 1. AI推理
+            const inferenceResult = await this.inferenceEngine.predict(imageData);
+            this.emitAppEvent('inference-complete', inferenceResult);
+            
+            const inferenceTime = performance.now() - inferenceStartTime;
+            this.lastInferenceTime = currentTime; // 更新最后推理时间
+            
+            // 性能监控：分析开始
+            const analysisStartTime = performance.now();
+
+            // 2. 分析计算
+            const analysisResult = this.analysisEngine.analyze(inferenceResult.poses);
+            this.emitAppEvent('analysis-complete', analysisResult);
+            
+            const analysisTime = performance.now() - analysisStartTime;
+
+            // 3. 更新渲染数据以包含推理和分析结果
+            basicRenderData.poses = inferenceResult.poses;
+            basicRenderData.analysis = analysisResult;
+            basicRenderData.config = {
+              showKeypoints: this.config?.render.showKeypoints || true,
+              showSkeleton: this.config?.render.showSkeleton || true,
+              showConfidence: this.config?.render.showConfidence || false,
+              showBoundingBox: this.config?.render.showBoundingBox || false,
+              showAnalysis: this.config?.render.showAnalysis || false,
+              showPerformance: this.config?.render.showPerformance || false,
+              keypointRadius: 4,
+              skeletonLineWidth: 2,
+              colors: {
+                keypoint: '#00ff00',
+                skeleton: '#ff0000',
+                confidence: '#0000ff'
+              }
+            };
+
+            // 4. 更新性能指标
+            const totalTime = performance.now() - frameStartTime;
+            basicRenderData.performance = {
+              frameRate: Math.round(1000 / totalTime),
+              averageFrameTime: totalTime,
+              inferenceTime,
+              memoryUsage: this.getMemoryUsage(),
+              cacheHitRate: 0,
+              totalFrames: 0,
+              droppedFrames: 0
+            };
+
+            this.updatePerformanceMetrics(inferenceTime, totalTime);
+            
+            // 性能日志（仅在开发模式下）
+             if (typeof process !== 'undefined' && process.env?.['NODE_ENV'] === 'development') {
+               console.debug(`🎯 帧处理性能: 总计=${totalTime.toFixed(1)}ms, 推理=${inferenceTime.toFixed(1)}ms, 分析=${analysisTime.toFixed(1)}ms`);
+             }
+            
+            // 性能警告
+            if (totalTime > 33) { // 超过33ms (30fps)
+              console.warn(`⚠️ 帧处理时间过长: ${totalTime.toFixed(1)}ms`);
+            }
+
+          } catch (inferenceError) {
+            console.error('❌ 推理处理失败:', inferenceError);
+            
+            // 尝试错误恢复
+            const recovered = await this.handleErrorWithRecovery(
+              inferenceError instanceof Error ? inferenceError : new Error(String(inferenceError)),
+              'inference'
+            );
+            
+            if (!recovered) {
+              this.emitAppEvent('error', { 
+                message: '推理失败', 
+                error: inferenceError instanceof Error ? inferenceError : new Error(String(inferenceError))
+              });
+            }
+            // 即使推理失败，仍然显示原始画面
+          }
+        } else if (!shouldRunInference) {
+          // 跳帧时使用上一次的推理结果（如果有的话）
+          this.frameSkipCount++;
+          if (typeof process !== 'undefined' && process.env?.['NODE_ENV'] === 'development') {
+            console.debug(`⏭️ 跳帧 ${this.frameSkipCount}/${this.maxFrameSkip}, 距离上次推理: ${(currentTime - this.lastInferenceTime).toFixed(1)}ms`);
+          }
         }
-      };
 
-      this.renderEngine.render(renderData);
-      this.emitAppEvent('render-complete');
-
-      // 4. 更新性能指标
-      const totalTime = performance.now() - startTime;
-      this.updatePerformanceMetrics(inferenceResult.inferenceTime, totalTime);
+        // 渲染画面（无论是否有推理结果）
+         this.renderEngine.render(basicRenderData);
+         this.emitAppEvent('render-complete');
+         
+         const totalFrameTime = performance.now() - frameStartTime;
+        
+        // 更新基础性能指标
+         if (basicRenderData.performance) {
+           basicRenderData.performance.averageFrameTime = totalFrameTime;
+           basicRenderData.performance.frameRate = Math.round(1000 / totalFrameTime);
+         }
+      }
 
     } catch (error) {
       console.error('❌ 帧处理失败:', error);
@@ -560,6 +841,58 @@ export class PoseEstimationApp {
       totalTime,
       frameRate: Math.round(1000 / totalTime)
     });
+
+    // 动态调整推理频率
+    this.adjustInferenceFrequency(inferenceTime);
+  }
+
+  /**
+   * 智能推理控制 - 决定是否应该运行推理
+   */
+  private shouldRunInference(currentTime: number): boolean {
+    // 如果是第一次推理，直接运行
+    if (this.lastInferenceTime === 0) {
+      this.frameSkipCount = 0;
+      return true;
+    }
+
+    // 检查时间间隔
+    const timeSinceLastInference = currentTime - this.lastInferenceTime;
+    
+    // 如果距离上次推理时间超过目标间隔，运行推理
+    if (timeSinceLastInference >= this.targetInferenceInterval) {
+      this.frameSkipCount = 0;
+      return true;
+    }
+
+    // 如果跳帧次数超过最大值，强制运行推理
+    if (this.frameSkipCount >= this.maxFrameSkip) {
+      this.frameSkipCount = 0;
+      return true;
+    }
+
+    // 否则跳过这一帧
+    return false;
+  }
+
+  /**
+   * 动态调整推理频率
+   */
+  private adjustInferenceFrequency(averageInferenceTime: number): void {
+    // 根据推理时间动态调整频率
+    if (averageInferenceTime > 200) {
+      // 推理时间过长，降低频率到 5fps
+      this.targetInferenceInterval = 200;
+      this.maxFrameSkip = 5;
+    } else if (averageInferenceTime > 100) {
+      // 推理时间中等，保持 10fps
+      this.targetInferenceInterval = 100;
+      this.maxFrameSkip = 2;
+    } else {
+      // 推理时间较短，可以提高到 15fps
+      this.targetInferenceInterval = 67;
+      this.maxFrameSkip = 1;
+    }
   }
 
   /**
@@ -667,6 +1000,31 @@ export class PoseEstimationApp {
       // Worker 管理器本身就是推理引擎的接口
       this.inferenceEngine = this.workerManager as any; // 类型转换，因为 WorkerManager 实现了推理接口
 
+      // 关键修复：在 Worker 初始化后，必须加载模型
+      try {
+        console.log('🔄 加载姿态估计模型到 Worker...');
+        console.log('📋 模型配置:', {
+          modelType: this.config.inference.modelType,
+          config: this.config.inference
+        });
+        
+        await this.workerManager.loadModel(
+          this.config.inference.modelType,
+          this.config.inference
+        );
+        
+        console.log('✅ 模型加载成功');
+        
+      } catch (modelError) {
+        console.error('❌ 模型加载失败:', modelError);
+        console.error('🔍 模型加载错误详情:', {
+          modelType: this.config.inference.modelType,
+          workerReady: (this.workerManager as any).isReady(),
+          error: modelError instanceof Error ? modelError.message : String(modelError)
+        });
+        throw new Error(`模型加载失败: ${modelError instanceof Error ? modelError.message : String(modelError)}`);
+      }
+
       // 更新状态
       stateManager.setState({
         model: {
@@ -685,6 +1043,12 @@ export class PoseEstimationApp {
       
     } catch (error) {
       console.error('❌ 推理引擎初始化失败:', error);
+      console.error('🔍 推理引擎初始化错误详情:', {
+        hasConfig: !!this.config,
+        hasWorkerManager: !!this.workerManager,
+        workerReady: this.workerManager ? (this.workerManager as any).isReady() : false,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   }
@@ -756,40 +1120,65 @@ export class PoseEstimationApp {
   }
 
   /**
+   * 获取内存使用情况
+   */
+  private getMemoryUsage(): { used: number; total: number; limit: number } {
+    if ('memory' in performance) {
+      const memory = (performance as any).memory;
+      return {
+        used: memory.usedJSHeapSize || 0,
+        total: memory.totalJSHeapSize || 0,
+        limit: memory.jsHeapSizeLimit || 0
+      };
+    }
+    return { used: 0, total: 0, limit: 0 };
+  }
+
+  /**
    * 清理资源
    */
-  dispose(): void {
-    this.stop();
-    
-    // 清理数据源
-    if (this.dataSource) {
-      this.dataSource.stop();
-      this.dataSource = null;
+  async dispose(): Promise<void> {
+    console.log('🧹 清理 PoseEstimationApp 资源...');
+
+    // 停止质量监控
+    if (this.qualityChecker) {
+      this.qualityChecker.stopChecking();
     }
 
-    // 清理推理引擎
+    // 停止应用
+    if (this.isRunning) {
+      await this.stop();
+    }
+
+    // 清理各个引擎
     if (this.inferenceEngine) {
-      this.inferenceEngine.dispose();
+      await this.inferenceEngine.dispose();
       this.inferenceEngine = null;
     }
 
-    // 清理分析引擎
     if (this.analysisEngine) {
       this.analysisEngine.dispose();
       this.analysisEngine = null;
     }
 
-    // 清理渲染引擎
     if (this.renderEngine) {
       this.renderEngine.dispose();
       this.renderEngine = null;
     }
 
-    // 清理Worker管理器
     if (this.workerManager) {
-      this.workerManager.dispose();
+      await this.workerManager.dispose();
       this.workerManager = null;
     }
+
+    // 清理数据源
+    if (this.dataSource) {
+      await this.dataSource.stop();
+      this.dataSource = null;
+    }
+
+    // 清理错误恢复记录
+    this.errorRecoveryAttempts.clear();
 
     // 清理事件监听器
     eventBus.clear();
@@ -801,7 +1190,7 @@ export class PoseEstimationApp {
     this.isRunning = false;
     this.config = null;
     
-    console.log('🧹 应用资源已清理');
+    console.log('✅ PoseEstimationApp 资源清理完成');
   }
 }
 

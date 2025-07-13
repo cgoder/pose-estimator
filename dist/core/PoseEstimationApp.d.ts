@@ -12,6 +12,35 @@ export declare class PoseEstimationApp {
     private isInitialized;
     private isRunning;
     private config;
+    private lastInferenceTime;
+    private targetInferenceInterval;
+    private frameSkipCount;
+    private maxFrameSkip;
+    private errorRecoveryAttempts;
+    private readonly maxRecoveryAttempts;
+    private readonly recoveryDelay;
+    private qualityChecker;
+    private performanceMonitor;
+    /**
+     * 智能错误恢复
+     */
+    private handleErrorWithRecovery;
+    /**
+     * 恢复推理引擎
+     */
+    private recoverInferenceEngine;
+    /**
+     * 恢复 Worker 管理器
+     */
+    private recoverWorkerManager;
+    /**
+     * 恢复数据源
+     */
+    private recoverDataSource;
+    /**
+     * 恢复渲染引擎
+     */
+    private recoverRenderEngine;
     constructor(config?: Partial<AppConfig>);
     /**
      * 合并默认配置
@@ -78,6 +107,14 @@ export declare class PoseEstimationApp {
      */
     private updatePerformanceMetrics;
     /**
+     * 智能推理控制 - 决定是否应该运行推理
+     */
+    private shouldRunInference;
+    /**
+     * 动态调整推理频率
+     */
+    private adjustInferenceFrequency;
+    /**
      * 发送应用事件
      */
     private emitAppEvent;
@@ -102,9 +139,13 @@ export declare class PoseEstimationApp {
      */
     private initializeRenderEngine;
     /**
+     * 获取内存使用情况
+     */
+    private getMemoryUsage;
+    /**
      * 清理资源
      */
-    dispose(): void;
+    dispose(): Promise<void>;
 }
 export declare function createPoseEstimationApp(config?: Partial<AppConfig>): PoseEstimationApp;
 export declare const poseApp: PoseEstimationApp;
