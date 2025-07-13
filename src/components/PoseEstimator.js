@@ -4,6 +4,7 @@ import { performanceMonitor, PerformanceOptimizer } from '../utils/performance.j
 import { adaptiveFrameController } from '../utils/adaptiveFrameController.js';
 import { hybridCacheManager } from './HybridCacheManager.js';
 import { OneEuroFilterManager } from './OneEuroFilterManager.js';
+import { offscreenRenderManager } from '../utils/offscreenRenderManager.js';
 
 /**
  * 姿态估计器主类
@@ -26,6 +27,7 @@ export class PoseEstimator {
             modelType: options.modelType || CONFIG.MODEL.DEFAULT_TYPE,
             showSkeleton: options.showSkeleton !== false,
             showKeypoints: options.showKeypoints !== false,
+            enableOffscreenRender: options.enableOffscreenRender !== false, // 默认启用
             // showPerformanceInfo: options.showPerformanceInfo !== false,
             ...options
         };
@@ -38,6 +40,14 @@ export class PoseEstimator {
             console.warn('⚠️ 自适应帧率控制器初始化失败:', error);
         });
         
+        // 初始化 OffscreenCanvas 渲染管理器
+        this.useOffscreenRender = false;
+        if (this.options.enableOffscreenRender) {
+            this._initOffscreenRender().catch(error => {
+                console.warn('⚠️ OffscreenCanvas 初始化失败，将使用主线程渲染:', error);
+            });
+        }
+        
         // 性能统计
         this.stats = {
             frameCount: 0,
@@ -47,6 +57,36 @@ export class PoseEstimator {
         };
         
         console.log('🤖 PoseEstimator已初始化:', this.options);
+    }
+    
+    /**
+     * 初始化 OffscreenCanvas 渲染
+     * @returns {Promise<void>}
+     */
+    async _initOffscreenRender() {
+        try {
+            console.log('🎨 初始化 OffscreenCanvas 渲染...');
+            
+            // 检查是否支持 OffscreenCanvas
+            if (!offscreenRenderManager.isSupported) {
+                console.warn('⚠️ 浏览器不支持 OffscreenCanvas');
+                return;
+            }
+            
+            // 初始化 OffscreenCanvas 渲染管理器
+            const success = await offscreenRenderManager.init(this.canvas);
+            
+            if (success) {
+                this.useOffscreenRender = true;
+                console.log('✅ OffscreenCanvas 渲染初始化成功');
+            } else {
+                console.warn('⚠️ OffscreenCanvas 渲染初始化失败');
+            }
+            
+        } catch (error) {
+            console.error('❌ OffscreenCanvas 渲染初始化错误:', error);
+            this.useOffscreenRender = false;
+        }
     }
     
     /**
@@ -234,12 +274,6 @@ export class PoseEstimator {
                 return;
             }
             
-            // 清空画布
-            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-            
-            // 绘制视频帧
-            this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
-            
             // 姿态检测
             const poses = await this.detector.estimatePoses(this.video);
             
@@ -247,6 +281,8 @@ export class PoseEstimator {
             const inferenceTime = performance.now() - inferenceStartTime;
             adaptiveFrameController.recordInferenceTime(inferenceTime);
             
+            // 处理姿态数据
+            let processedPoses = [];
             if (poses && poses.length > 0) {
                 const pose = poses[0];
                 
@@ -256,20 +292,14 @@ export class PoseEstimator {
                     performance.now()
                 );
                 
-                // 绘制姿态
-                if (this.options.showSkeleton) {
-                    this._drawSkeleton(filteredKeypoints);
-                }
-                
-                if (this.options.showKeypoints) {
-                    this._drawKeypoints(filteredKeypoints);
-                }
+                processedPoses = [{
+                    ...pose,
+                    keypoints: filteredKeypoints
+                }];
             }
             
-            // // 绘制性能信息
-            // if (this.options.showPerformanceInfo) {
-            //     this._drawPerformanceInfo();
-            // }
+            // 渲染帧
+            await this._renderFrame(processedPoses);
             
             // 更新性能统计
             performanceMonitor.frameEnd(frameStartTime);
@@ -329,6 +359,59 @@ export class PoseEstimator {
                         this.animationId = requestAnimationFrame(() => this._detectPoseInRealTime());
                     }
                 }, Math.min(100 * this.stats.errorCount, 1000)); // 递增延迟，最大1秒
+            }
+        }
+    }
+    
+    /**
+     * 渲染帧（支持 OffscreenCanvas 和主线程渲染）
+     * @param {Array} poses - 姿态数组
+     */
+    async _renderFrame(poses = []) {
+        try {
+            if (this.useOffscreenRender && offscreenRenderManager.isAvailable()) {
+                // 使用 OffscreenCanvas 渲染
+                await offscreenRenderManager.renderFrame(this.video, poses, {
+                    showSkeleton: this.options.showSkeleton,
+                    showKeypoints: this.options.showKeypoints,
+                    showKeypointLabels: this.options.showKeypointLabels
+                });
+            } else {
+                // 使用主线程渲染（备用方案）
+                this._renderFrameMainThread(poses);
+            }
+        } catch (error) {
+            console.error('❌ 渲染帧失败:', error);
+            // 如果 OffscreenCanvas 渲染失败，回退到主线程渲染
+            if (this.useOffscreenRender) {
+                console.warn('⚠️ OffscreenCanvas 渲染失败，回退到主线程渲染');
+                this.useOffscreenRender = false;
+                this._renderFrameMainThread(poses);
+            }
+        }
+    }
+    
+    /**
+     * 主线程渲染（备用方案）
+     * @param {Array} poses - 姿态数组
+     */
+    _renderFrameMainThread(poses = []) {
+        // 清空画布
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // 绘制视频帧
+        this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+        
+        // 绘制姿态
+        if (poses && poses.length > 0) {
+            const pose = poses[0];
+            
+            if (this.options.showSkeleton && pose.keypoints) {
+                this._drawSkeleton(pose.keypoints);
+            }
+            
+            if (this.options.showKeypoints && pose.keypoints) {
+                this._drawKeypoints(pose.keypoints);
             }
         }
     }
@@ -458,6 +541,17 @@ export class PoseEstimator {
     async cleanup() {
         await this.stop();
         
+        // 清理 OffscreenCanvas 渲染管理器
+        if (this.useOffscreenRender) {
+            try {
+                await offscreenRenderManager.cleanup();
+                this.useOffscreenRender = false;
+                console.log('🧹 OffscreenCanvas 渲染管理器已清理');
+            } catch (error) {
+                console.warn('⚠️ OffscreenCanvas 清理失败:', error);
+            }
+        }
+        
         // 清理摄像头
         if (this.video) {
             if (this.video.srcObject) {
@@ -521,7 +615,13 @@ export class PoseEstimator {
             options: this.options,
             performance: performanceMonitor.getReport(),
             cache: hybridCacheManager.getStats(),
-            filter: this.filterManager.getStats()
+            filter: this.filterManager.getStats(),
+            offscreenRender: {
+                enabled: this.useOffscreenRender,
+                supported: offscreenRenderManager.isSupported,
+                available: offscreenRenderManager.isAvailable(),
+                stats: offscreenRenderManager.getStats()
+            }
         };
     }
     

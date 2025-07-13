@@ -5,10 +5,12 @@ import { adaptiveFrameController } from './utils/adaptiveFrameController.js';
 import { hybridCacheManager as modelCacheManager } from './components/HybridCacheManager.js';
 import { PoseEstimator } from './components/PoseEstimator.js';
 import { uiManager } from './components/UIManager.js';
+import { offscreenRenderManager } from './utils/offscreenRenderManager.js';
 
 // 暴露到全局作用域以便调试和监控面板访问
 window.performanceMonitor = performanceMonitor;
 window.adaptiveFrameController = adaptiveFrameController;
+window.offscreenRenderManager = offscreenRenderManager;
 
 /**
  * 主应用类
