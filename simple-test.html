@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>简单测试</title>
+</head>
+<body>
+    <h1>模块导入测试</h1>
+    <div id="output"></div>
+    
+    <script type="module">
+        const output = document.getElementById('output');
+        
+        try {
+            // 测试导入 UIManager
+            const { uiManager } = await import('./src/components/UIManager.js');
+            
+            output.innerHTML += '<p>✅ UIManager 导入成功</p>';
+            output.innerHTML += `<p>uiManager 类型: ${typeof uiManager}</p>`;
+            output.innerHTML += `<p>构造函数名: ${uiManager.constructor.name}</p>`;
+            
+            // 测试 setPoseEstimator 方法
+            if (typeof uiManager.setPoseEstimator === 'function') {
+                output.innerHTML += '<p>✅ setPoseEstimator 方法存在</p>';
+            } else {
+                output.innerHTML += '<p>❌ setPoseEstimator 方法不存在</p>';
+            }
+            
+            // 列出所有方法
+            const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(uiManager))
+                .filter(name => typeof uiManager[name] === 'function' && name !== 'constructor');
+            
+            output.innerHTML += '<h3>可用方法:</h3>';
+            output.innerHTML += '<ul>';
+            methods.forEach(method => {
+                output.innerHTML += `<li>${method}</li>`;
+            });
+            output.innerHTML += '</ul>';
+            
+        } catch (error) {
+            output.innerHTML += `<p style="color: red;">❌ 错误: ${error.message}</p>`;
+            console.error('测试失败:', error);
+        }
+    </script>
+</body>
+</html>

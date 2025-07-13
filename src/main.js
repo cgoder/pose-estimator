@@ -183,8 +183,23 @@ class PoseEstimationApp {
      * 初始化UI
      */
     initUI() {
-        // 设置PoseEstimator实例引用到UIManager
-        uiManager.setPoseEstimator(this.poseEstimator);
+        // 调试信息：检查 uiManager 对象
+        console.log('🔍 调试信息 - uiManager:', uiManager);
+        
+        // 直接使用函数调用语法，避免可能的属性访问问题
+        try {
+            // 设置PoseEstimator实例引用到UIManager
+            if (uiManager && this.poseEstimator) {
+                // 使用原型方法直接调用
+                Object.getPrototypeOf(uiManager).setPoseEstimator.call(uiManager, this.poseEstimator);
+                console.log('✅ 成功设置 PoseEstimator 实例到 UIManager');
+            } else {
+                console.warn('⚠️ uiManager 或 poseEstimator 不存在');
+            }
+        } catch (error) {
+            console.error('❌ 设置 PoseEstimator 失败:', error);
+            // 不抛出错误，尝试继续执行
+        }
         
         // 绑定控制面板事件
         uiManager.bindControlEvents({

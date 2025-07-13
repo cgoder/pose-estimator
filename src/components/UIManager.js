@@ -12,10 +12,15 @@ export class UIManager {
         this.statusElement = null;
         this.filterPanelElement = null;
         this.modelPanelElement = null;
+        this.poseEstimator = null;
         
         this.isInitialized = false;
         
+        // 确保方法正确绑定
+        this.setPoseEstimator = this.setPoseEstimator.bind(this);
+        
         console.log('🎨 UIManager已初始化');
+        console.log('🔧 setPoseEstimator方法类型:', typeof this.setPoseEstimator);
     }
     
     /**
