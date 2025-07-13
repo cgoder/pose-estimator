@@ -183,6 +183,9 @@ class PoseEstimationApp {
      * 初始化UI
      */
     initUI() {
+        // 设置PoseEstimator实例引用到UIManager
+        uiManager.setPoseEstimator(this.poseEstimator);
+        
         // 绑定控制面板事件
         uiManager.bindControlEvents({
             onModelPanelToggle: (enabled) => this.toggleModelPanel(enabled),
@@ -278,6 +281,9 @@ class PoseEstimationApp {
             
             // 创建新的估计器
             this.createPoseEstimator();
+            
+            // 更新UIManager的PoseEstimator引用
+            uiManager.setPoseEstimator(this.poseEstimator);
             
             // 重新启动
             await this.poseEstimator.start();

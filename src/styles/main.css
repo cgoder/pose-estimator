@@ -46,6 +46,75 @@ h1 {
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
 
+/* 摄像头切换按钮 */
+.camera-switch-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 45px;
+    height: 45px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    z-index: 10;
+}
+
+.camera-switch-btn:hover {
+    background: rgba(0, 0, 0, 0.9);
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.camera-switch-btn:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.camera-switch-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 摄像头切换动画 */
+@keyframes cameraSwitch {
+    0% {
+        transform: rotateY(0deg);
+    }
+    50% {
+        transform: rotateY(90deg);
+    }
+    100% {
+        transform: rotateY(0deg);
+    }
+}
+
+.camera-switching {
+    animation: cameraSwitch 0.6s ease-in-out;
+}
+
+/* 移动设备优化 */
+@media (max-width: 768px) {
+    .camera-switch-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+        top: 10px;
+        right: 10px;
+    }
+}
+
 /* Canvas样式 */
 #canvas {
     display: block;
