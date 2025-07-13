@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OffscreenCanvas 渲染测试</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .test-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .canvas-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        canvas {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 OffscreenCanvas 渲染测试</h1>
+            <p>测试 OffscreenCanvas 渲染功能和性能</p>
+        </div>
+        
+        <div class="test-section">
+            <h2>浏览器支持检测</h2>
+            <div id="support-status" class="status">检测中...</div>
+        </div>
+        
+        <div class="test-section">
+            <h2>基础渲染测试</h2>
+            <div class="canvas-container">
+                <canvas id="test-canvas" width="640" height="480"></canvas>
+            </div>
+            <div class="controls">
+                <button id="start-camera">启动摄像头</button>
+                <button id="toggle-offscreen">切换渲染模式</button>
+                <button id="show-stats">显示统计</button>
+                <button id="reset-test">重置测试</button>
+            </div>
+            <div id="render-status" class="status">等待开始测试...</div>
+        </div>
+        
+        <div class="test-section">
+            <h2>性能对比</h2>
+            <div id="performance-comparison" class="status">
+                <div>主线程渲染: 未测试</div>
+                <div>OffscreenCanvas 渲染: 未测试</div>
+                <div>性能提升: 未知</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { PoseEstimator } from './src/components/PoseEstimator.js';
+        import { offscreenRenderManager } from './src/utils/offscreenRenderManager.js';
+        
+        class OffscreenCanvasTest {
+            constructor() {
+                this.canvas = document.getElementById('test-canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.poseEstimator = null;
+                this.isRunning = false;
+                this.useOffscreen = false;
+                this.performanceData = {
+                    mainThread: { fps: 0, renderTime: 0 },
+                    offscreen: { fps: 0, renderTime: 0 }
+                };
+                
+                this.init();
+            }
+            
+            async init() {
+                this.checkSupport();
+                this.setupEventListeners();
+                
+                // 初始化 PoseEstimator
+                try {
+                    this.poseEstimator = new PoseEstimator(this.canvas, {
+                        enableOffscreenRender: true,
+                        modelType: 'MoveNet',
+                        enableOptimization: true
+                    });
+                    
+                    this.updateStatus('render-status', '✅ PoseEstimator 初始化成功', 'success');
+                } catch (error) {
+                    this.updateStatus('render-status', `❌ PoseEstimator 初始化失败: ${error.message}`, 'error');
+                }
+            }
+            
+            checkSupport() {
+                const supportStatus = document.getElementById('support-status');
+                
+                const checks = [
+                    { name: 'OffscreenCanvas', supported: typeof OffscreenCanvas !== 'undefined' },
+                    { name: 'Web Workers', supported: typeof Worker !== 'undefined' },
+                    { name: 'Canvas 2D Context', supported: !!this.ctx },
+                    { name: 'getUserMedia', supported: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) }
+                ];
+                
+                let allSupported = true;
+                let statusHTML = '<h3>浏览器支持情况:</h3>';
+                
+                checks.forEach(check => {
+                    const icon = check.supported ? '✅' : '❌';
+                    statusHTML += `<div>${icon} ${check.name}: ${check.supported ? '支持' : '不支持'}</div>`;
+                    if (!check.supported) allSupported = false;
+                });
+                
+                statusHTML += `<div style="margin-top: 10px; font-weight: bold;">
+                    总体支持: ${allSupported ? '✅ 完全支持' : '⚠️ 部分支持'}
+                </div>`;
+                
+                supportStatus.innerHTML = statusHTML;
+                supportStatus.className = `status ${allSupported ? 'success' : 'warning'}`;
+            }
+            
+            setupEventListeners() {
+                document.getElementById('start-camera').addEventListener('click', () => this.startCamera());
+                document.getElementById('toggle-offscreen').addEventListener('click', () => this.toggleOffscreen());
+                document.getElementById('show-stats').addEventListener('click', () => this.showStats());
+                document.getElementById('reset-test').addEventListener('click', () => this.resetTest());
+            }
+            
+            async startCamera() {
+                try {
+                    if (!this.poseEstimator) {
+                        throw new Error('PoseEstimator 未初始化');
+                    }
+                    
+                    this.updateStatus('render-status', '🎥 启动摄像头中...', 'warning');
+                    
+                    await this.poseEstimator.start();
+                    this.isRunning = true;
+                    
+                    this.updateStatus('render-status', '✅ 摄像头已启动，开始姿态检测', 'success');
+                    
+                    // 开始性能监控
+                    this.startPerformanceMonitoring();
+                    
+                } catch (error) {
+                    this.updateStatus('render-status', `❌ 摄像头启动失败: ${error.message}`, 'error');
+                }
+            }
+            
+            async toggleOffscreen() {
+                if (!this.poseEstimator) return;
+                
+                try {
+                    // 获取当前状态
+                    const status = this.poseEstimator.getStatus();
+                    const currentOffscreen = status.offscreenRender.enabled;
+                    
+                    this.updateStatus('render-status', `🔄 切换渲染模式: ${currentOffscreen ? '主线程' : 'OffscreenCanvas'}`, 'warning');
+                    
+                    // 重新初始化 PoseEstimator
+                    await this.poseEstimator.cleanup();
+                    
+                    this.poseEstimator = new PoseEstimator(this.canvas, {
+                        enableOffscreenRender: !currentOffscreen,
+                        modelType: 'MoveNet',
+                        enableOptimization: true
+                    });
+                    
+                    if (this.isRunning) {
+                        await this.poseEstimator.start();
+                    }
+                    
+                    const newStatus = this.poseEstimator.getStatus();
+                    const newOffscreen = newStatus.offscreenRender.enabled;
+                    
+                    this.updateStatus('render-status', 
+                        `✅ 渲染模式已切换: ${newOffscreen ? 'OffscreenCanvas' : '主线程'}`, 'success');
+                    
+                } catch (error) {
+                    this.updateStatus('render-status', `❌ 渲染模式切换失败: ${error.message}`, 'error');
+                }
+            }
+            
+            showStats() {
+                if (!this.poseEstimator) return;
+                
+                const status = this.poseEstimator.getStatus();
+                
+                let statsHTML = '<h3>当前状态:</h3>';
+                statsHTML += `<div>运行状态: ${status.isRunning ? '✅ 运行中' : '❌ 已停止'}</div>`;
+                statsHTML += `<div>OffscreenCanvas: ${status.offscreenRender.enabled ? '✅ 启用' : '❌ 禁用'}</div>`;
+                statsHTML += `<div>浏览器支持: ${status.offscreenRender.supported ? '✅' : '❌'}</div>`;
+                statsHTML += `<div>Worker可用: ${status.offscreenRender.available ? '✅' : '❌'}</div>`;
+                
+                if (status.offscreenRender.stats) {
+                    const stats = status.offscreenRender.stats;
+                    statsHTML += '<h4>渲染统计:</h4>';
+                    statsHTML += `<div>渲染帧数: ${stats.framesRendered}</div>`;
+                    statsHTML += `<div>平均渲染时间: ${stats.averageRenderTime}ms</div>`;
+                    statsHTML += `<div>错误次数: ${stats.errorCount}</div>`;
+                    statsHTML += `<div>Worker状态: ${stats.workerStatus}</div>`;
+                }
+                
+                this.updateStatus('render-status', statsHTML, 'success');
+            }
+            
+            startPerformanceMonitoring() {
+                // 每秒更新性能数据
+                setInterval(() => {
+                    if (this.poseEstimator) {
+                        const status = this.poseEstimator.getStatus();
+                        this.updatePerformanceComparison(status);
+                    }
+                }, 1000);
+            }
+            
+            updatePerformanceComparison(status) {
+                const comparison = document.getElementById('performance-comparison');
+                
+                let html = '<h3>性能对比:</h3>';
+                
+                if (status.performance) {
+                    const perf = status.performance;
+                    html += `<div>当前FPS: ${perf.fps || 0}</div>`;
+                    html += `<div>平均推理时间: ${perf.averageInferenceTime || 0}ms</div>`;
+                    html += `<div>CPU使用率: ${perf.cpuUsage || 0}%</div>`;
+                }
+                
+                if (status.offscreenRender.stats) {
+                    const stats = status.offscreenRender.stats;
+                    html += `<div>渲染模式: ${status.offscreenRender.enabled ? 'OffscreenCanvas' : '主线程'}</div>`;
+                    html += `<div>渲染时间: ${stats.averageRenderTime}ms</div>`;
+                    html += `<div>渲染帧数: ${stats.framesRendered}</div>`;
+                }
+                
+                comparison.innerHTML = html;
+            }
+            
+            async resetTest() {
+                try {
+                    if (this.poseEstimator) {
+                        await this.poseEstimator.cleanup();
+                    }
+                    
+                    this.isRunning = false;
+                    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                    
+                    this.updateStatus('render-status', '🔄 测试已重置', 'warning');
+                    
+                    // 重新初始化
+                    setTimeout(() => this.init(), 1000);
+                    
+                } catch (error) {
+                    this.updateStatus('render-status', `❌ 重置失败: ${error.message}`, 'error');
+                }
+            }
+            
+            updateStatus(elementId, message, type = '') {
+                const element = document.getElementById(elementId);
+                if (element) {
+                    element.innerHTML = message;
+                    element.className = `status ${type}`;
+                }
+            }
+        }
+        
+        // 启动测试
+        new OffscreenCanvasTest();
+    </script>
+</body>
+</html>

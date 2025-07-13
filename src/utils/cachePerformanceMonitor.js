@@ -205,6 +205,34 @@ export class CachePerformanceMonitor {
             }
         }
         
+        // 获取 OffscreenCanvas 渲染统计（如果可用）
+        let offscreenRenderStats = '';
+        if (window.offscreenRenderManager) {
+            try {
+                const renderStats = window.offscreenRenderManager.getStats();
+                const isSupported = window.offscreenRenderManager.isSupported;
+                const isAvailable = window.offscreenRenderManager.isAvailable();
+                
+                offscreenRenderStats = `
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-weight: bold; margin-bottom: 5px; color: #9b59b6;">🎨 OffscreenCanvas 渲染</div>
+                        <div style="margin-bottom: 3px;">支持: ${isSupported ? '✅' : '❌'}</div>
+                        <div style="margin-bottom: 3px;">可用: ${isAvailable ? '✅' : '❌'}</div>
+                        <div style="margin-bottom: 3px;">渲染帧数: ${renderStats.framesRendered}</div>
+                        <div style="margin-bottom: 3px;">平均渲染时间: ${renderStats.averageRenderTime}ms</div>
+                        <div style="margin-bottom: 3px;">错误次数: ${renderStats.errorCount}</div>
+                        <div style="margin-bottom: 3px;">Worker状态: ${renderStats.workerStatus}</div>
+                    </div>
+                `;
+            } catch (error) {
+                offscreenRenderStats = `
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2);">
+                        <div style="color: #ff6b6b;">🎨 OffscreenCanvas 数据获取失败</div>
+                    </div>
+                `;
+            }
+        }
+        
         panel.innerHTML = `
             <div style="font-weight: bold; margin-bottom: 10px; color: #3498db;">
                 📊 缓存性能监控
@@ -231,6 +259,7 @@ export class CachePerformanceMonitor {
                 <span style="color: #e67e22;">错误:</span> ${report.errorCount}
             </div>
             ${frameControlStats}
+            ${offscreenRenderStats}
             <div style="font-size: 10px; color: #95a5a6; margin-top: 10px;">
                 更新时间: ${report.lastUpdated}
             </div>
