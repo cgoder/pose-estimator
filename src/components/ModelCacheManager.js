@@ -4,12 +4,14 @@ import { performanceMonitor } from '../utils/performance.js';
 
 /**
  * 模型缓存管理器
- * 提供内存缓存和IndexedDB持久化缓存功能
+ * 提供内存缓存功能，IndexedDB仅用于存储模型元数据
+ * 注意：TensorFlow.js模型对象无法直接序列化，因此只在内存中缓存
  */
 export class ModelCacheManager {
     constructor() {
-        this.modelCache = new Map(); // 内存缓存
-        this.db = null; // IndexedDB实例
+        this.modelCache = new Map(); // 内存缓存 - 存储实际模型对象
+        this.metadataCache = new Map(); // 元数据缓存
+        this.db = null; // IndexedDB实例 - 仅存储模型元数据
         this.cacheStats = {
             hits: 0,
             misses: 0,
@@ -26,7 +28,7 @@ export class ModelCacheManager {
     }
     
     /**
-     * 初始化IndexedDB
+     * 初始化IndexedDB（仅用于元数据存储）
      * @returns {Promise<void>}
      */
     async initDB() {
@@ -34,24 +36,25 @@ export class ModelCacheManager {
             const request = indexedDB.open(CONFIG.CACHE.DB_NAME, CONFIG.CACHE.DB_VERSION);
             
             request.onerror = () => {
-                console.warn('💾 IndexedDB初始化失败，将使用内存缓存');
+                console.warn('💾 IndexedDB初始化失败，将仅使用内存缓存');
                 resolve(); // 不阻止应用启动
             };
             
             request.onsuccess = (event) => {
                 this.db = event.target.result;
-                console.log('💾 IndexedDB初始化成功');
+                console.log('💾 IndexedDB初始化成功（元数据存储）');
                 resolve();
             };
             
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
                 
-                // 创建模型存储
+                // 创建模型元数据存储
                 if (!db.objectStoreNames.contains(CONFIG.CACHE.STORE_NAME)) {
                     const store = db.createObjectStore(CONFIG.CACHE.STORE_NAME, { keyPath: 'key' });
                     store.createIndex('timestamp', 'timestamp', { unique: false });
                     store.createIndex('version', 'version', { unique: false });
+                    store.createIndex('modelType', 'modelType', { unique: false });
                 }
             };
         });
@@ -124,11 +127,11 @@ export class ModelCacheManager {
     }
     
     /**
-     * 从IndexedDB获取模型
+     * 从IndexedDB获取模型元数据
      * @param {string} cacheKey - 缓存键
-     * @returns {Promise<Object|null>} 缓存的模型数据
+     * @returns {Promise<Object|null>} 缓存的模型元数据
      */
-    async _getFromIndexedDB(cacheKey) {
+    async _getMetadataFromIndexedDB(cacheKey) {
         if (!this.db) return null;
         
         return new Promise((resolve) => {
@@ -139,12 +142,11 @@ export class ModelCacheManager {
             request.onsuccess = () => {
                 const result = request.result;
                 if (result && !this._isCacheExpired(result.timestamp)) {
-                    this.cacheStats.hits++;
-                    console.log(`🎯 IndexedDB缓存命中: ${cacheKey}`);
+                    console.log(`📋 IndexedDB元数据命中: ${cacheKey}`);
                     resolve(result);
                 } else if (result) {
-                    console.log(`⏰ IndexedDB缓存过期: ${cacheKey}`);
-                    this._deleteFromIndexedDB(cacheKey);
+                    console.log(`⏰ IndexedDB元数据过期: ${cacheKey}`);
+                    this._deleteMetadataFromIndexedDB(cacheKey);
                     resolve(null);
                 } else {
                     resolve(null);
@@ -152,28 +154,31 @@ export class ModelCacheManager {
             };
             
             request.onerror = () => {
-                console.warn(`❌ IndexedDB读取失败: ${cacheKey}`);
+                console.warn(`❌ IndexedDB元数据读取失败: ${cacheKey}`);
                 resolve(null);
             };
         });
     }
     
     /**
-     * 存储到IndexedDB
+     * 存储模型元数据到IndexedDB
      * @param {string} cacheKey - 缓存键
-     * @param {Object} modelData - 模型数据
+     * @param {Object} metadata - 模型元数据
      * @returns {Promise<void>}
      */
-    async _setToIndexedDB(cacheKey, modelData) {
+    async _setMetadataToIndexedDB(cacheKey, metadata) {
         if (!this.db) return;
         
         return new Promise((resolve) => {
             const transaction = this.db.transaction([CONFIG.CACHE.STORE_NAME], 'readwrite');
             const store = transaction.objectStore(CONFIG.CACHE.STORE_NAME);
             
+            // 只存储可序列化的元数据
             const cacheData = {
                 key: cacheKey,
-                ...modelData,
+                modelType: metadata.modelType,
+                modelUrl: metadata.modelUrl,
+                loadTime: metadata.loadTime,
                 timestamp: Date.now(),
                 version: CONFIG.MODEL.CACHE_VERSION
             };
@@ -181,23 +186,23 @@ export class ModelCacheManager {
             const request = store.put(cacheData);
             
             request.onsuccess = () => {
-                console.log(`💾 存储到IndexedDB: ${cacheKey}`);
+                console.log(`📋 元数据存储到IndexedDB: ${cacheKey}`);
                 resolve();
             };
             
-            request.onerror = () => {
-                console.warn(`❌ IndexedDB存储失败: ${cacheKey}`);
+            request.onerror = (event) => {
+                console.warn(`❌ IndexedDB元数据存储失败: ${cacheKey}`, event.target.error);
                 resolve();
             };
         });
     }
     
     /**
-     * 从IndexedDB删除缓存
+     * 从IndexedDB删除元数据
      * @param {string} cacheKey - 缓存键
      * @returns {Promise<void>}
      */
-    async _deleteFromIndexedDB(cacheKey) {
+    async _deleteMetadataFromIndexedDB(cacheKey) {
         if (!this.db) return;
         
         return new Promise((resolve) => {
@@ -206,12 +211,12 @@ export class ModelCacheManager {
             const request = store.delete(cacheKey);
             
             request.onsuccess = () => {
-                console.log(`🗑️ 从IndexedDB删除: ${cacheKey}`);
+                console.log(`🗑️ 从IndexedDB删除元数据: ${cacheKey}`);
                 resolve();
             };
             
             request.onerror = () => {
-                console.warn(`❌ IndexedDB删除失败: ${cacheKey}`);
+                console.warn(`❌ IndexedDB元数据删除失败: ${cacheKey}`);
                 resolve();
             };
         });
@@ -235,13 +240,10 @@ export class ModelCacheManager {
                 return cached.model;
             }
             
-            // 2. 尝试从IndexedDB获取
-            cached = await this._getFromIndexedDB(cacheKey);
-            if (cached) {
-                // 恢复到内存缓存
-                this._setToMemoryCache(cacheKey, { model: cached.model });
-                performanceMonitor.updateCacheHitRate(this.cacheStats.hits, this.cacheStats.hits + this.cacheStats.misses);
-                return cached.model;
+            // 2. 检查IndexedDB中是否有元数据记录（表示模型曾经被加载过）
+            const metadata = await this._getMetadataFromIndexedDB(cacheKey);
+            if (metadata) {
+                console.log(`📋 发现模型元数据，重新加载: ${modelType}`);
             }
             
             // 3. 缓存未命中，创建新模型
@@ -260,10 +262,12 @@ export class ModelCacheManager {
             const loadTime = performance.now() - startTime;
             console.log(`✅ 模型加载完成: ${modelType} (${loadTime.toFixed(1)}ms)`);
             
-            // 4. 存储到缓存
-            const modelData = { model, loadTime, modelType };
+            // 4. 存储到内存缓存
+            const modelData = { model, loadTime, modelType, modelUrl };
             this._setToMemoryCache(cacheKey, modelData);
-            await this._setToIndexedDB(cacheKey, modelData);
+            
+            // 5. 存储元数据到IndexedDB（不存储模型对象本身）
+            await this._setMetadataToIndexedDB(cacheKey, modelData);
             
             performanceMonitor.updateCacheHitRate(this.cacheStats.hits, this.cacheStats.hits + this.cacheStats.misses);
             return model;
@@ -285,7 +289,7 @@ export class ModelCacheManager {
         const cacheKey = this._generateCacheKey(modelType, modelUrl);
         
         // 检查是否已缓存
-        if (this._getFromMemoryCache(cacheKey) || await this._getFromIndexedDB(cacheKey)) {
+        if (this._getFromMemoryCache(cacheKey) || await this._getMetadataFromIndexedDB(cacheKey)) {
             console.log(`✅ 模型已缓存: ${modelType}`);
             return;
         }
@@ -313,7 +317,15 @@ export class ModelCacheManager {
             }
         }
         
-        // 清理IndexedDB缓存
+        // 清理元数据缓存
+        for (const [key, data] of this.metadataCache.entries()) {
+            if (this._isCacheExpired(data.timestamp)) {
+                this.metadataCache.delete(key);
+                console.log(`🗑️ 清理过期元数据缓存: ${key}`);
+            }
+        }
+        
+        // 清理IndexedDB元数据
         if (!this.db) return;
         
         return new Promise((resolve) => {
@@ -327,7 +339,7 @@ export class ModelCacheManager {
                 if (cursor) {
                     if (this._isCacheExpired(cursor.value.timestamp)) {
                         cursor.delete();
-                        console.log(`🗑️ 清理过期IndexedDB缓存: ${cursor.value.key}`);
+                        console.log(`🗑️ 清理过期IndexedDB元数据: ${cursor.value.key}`);
                     }
                     cursor.continue();
                 } else {
@@ -336,7 +348,7 @@ export class ModelCacheManager {
             };
             
             request.onerror = () => {
-                console.warn('❌ 清理IndexedDB缓存失败');
+                console.warn('❌ 清理IndexedDB元数据失败');
                 resolve();
             };
         });
@@ -354,7 +366,9 @@ export class ModelCacheManager {
             ...this.cacheStats,
             hitRate: parseFloat(hitRate),
             memoryCacheSize: this.modelCache.size,
-            dbConnected: !!this.db
+            metadataCacheSize: this.metadataCache.size,
+            dbConnected: !!this.db,
+            note: 'TensorFlow.js模型仅存储在内存中，IndexedDB仅存储元数据'
         };
     }
     
@@ -365,8 +379,9 @@ export class ModelCacheManager {
     async clearAll() {
         // 清空内存缓存
         this.modelCache.clear();
+        this.metadataCache.clear();
         
-        // 清空IndexedDB
+        // 清空IndexedDB元数据
         if (this.db) {
             return new Promise((resolve) => {
                 const transaction = this.db.transaction([CONFIG.CACHE.STORE_NAME], 'readwrite');

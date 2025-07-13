@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-简单的HTTP服务器用于测试PWA应用
+简单的HTTP服务器用于测试姿态估计应用
 使用方法: python server.py
 然后在浏览器中访问 http://localhost:8080
 """
@@ -12,8 +12,8 @@ import os
 import sys
 from pathlib import Path
 
-class PWAHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
-    """自定义HTTP请求处理器，添加PWA所需的MIME类型"""
+class CustomHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    """自定义HTTP请求处理器，添加必要的MIME类型和头部"""
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -24,7 +24,7 @@ class PWAHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         
-        # 添加PWA相关的头部
+        # 添加正确的MIME类型
         if self.path.endswith('.json'):
             self.send_header('Content-Type', 'application/json')
         elif self.path.endswith('.js'):
@@ -52,14 +52,14 @@ class PWAHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         print(f"[{self.log_date_time_string()}] {format % args}")
 
 def main():
-    # 设置端口
-    PORT = 8080
+    # 设置端口，支持环境变量
+    PORT = int(os.environ.get('PORT', 8080))
     
     # 确保在正确的目录中运行
     script_dir = Path(__file__).parent
     os.chdir(script_dir)
     
-    print(f"PWA姿态估计器服务器")
+    print(f"姿态估计器开发服务器")
     print(f"当前目录: {os.getcwd()}")
     print(f"启动服务器在端口 {PORT}...")
     print(f"请在浏览器中访问: http://localhost:{PORT}")
@@ -67,7 +67,7 @@ def main():
     print("-" * 50)
     
     try:
-        with socketserver.TCPServer(("", PORT), PWAHTTPRequestHandler) as httpd:
+        with socketserver.TCPServer(("", PORT), CustomHTTPRequestHandler) as httpd:
             httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n服务器已停止")

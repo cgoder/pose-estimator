@@ -64,11 +64,38 @@ export const CONFIG = {
     
     // 缓存配置
     CACHE: {
+        // IndexedDB 配置
         DB_NAME: 'PoseEstimatorCache',
         DB_VERSION: 1,
         STORE_NAME: 'models',
         MAX_MEMORY_CACHE_SIZE: 5,
-        CACHE_EXPIRY_DAYS: 7
+        CACHE_EXPIRY_DAYS: 7,
+        
+        // 高级缓存策略配置
+        ENABLE_CACHE_API: true,           // 启用 Cache API
+        ENABLE_FILE_SYSTEM: false,       // 启用 File System Access API（需要用户授权）
+        ENABLE_HYBRID_CACHE: true,       // 启用混合缓存策略
+        
+        // Cache API 配置
+        CACHE_API: {
+            CACHE_NAME_PREFIX: 'tf-models',
+            MAX_CACHE_SIZE: 100 * 1024 * 1024, // 100MB
+            CLEANUP_THRESHOLD: 0.8              // 80% 时开始清理
+        },
+        
+        // File System Access API 配置
+        FILE_SYSTEM: {
+            DIRECTORY_NAME: 'tf-models-cache',
+            MAX_FILE_SIZE: 50 * 1024 * 1024,    // 50MB per file
+            COMPRESSION_ENABLED: true
+        },
+        
+        // 缓存策略优先级
+        STRATEGY_PRIORITY: [
+            'filesystem',  // File System Access API (最佳性能)
+            'cache-api',   // Cache API (推荐)
+            'indexeddb'    // IndexedDB + Memory (兼容性最好)
+        ]
     },
     
     // 错误消息
@@ -114,11 +141,83 @@ export const BROWSER_SUPPORT = {
         return 'indexedDB' in window;
     },
     
+    checkCamera: () => {
+        return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    },
+    
+    // 新增：Cache API 支持检测
+    checkCacheAPI: () => {
+        return 'caches' in window;
+    },
+    
+    // 新增：File System Access API 支持检测
+    checkFileSystemAccess: () => {
+        return 'showDirectoryPicker' in window;
+    },
+    
+    // 新增：Service Worker 支持检测
     checkServiceWorker: () => {
         return 'serviceWorker' in navigator;
     },
     
-    checkCamera: () => {
-        return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    // 新增：WebAssembly 支持检测
+    checkWebAssembly: () => {
+        return 'WebAssembly' in window;
+    },
+    
+    // 新增：Compression Streams API 支持检测
+    checkCompressionStreams: () => {
+        return 'CompressionStream' in window;
+    },
+    
+    // 新增：综合缓存能力评估
+    getCacheCapabilities: () => {
+        const capabilities = {
+            indexedDB: BROWSER_SUPPORT.checkIndexedDB(),
+            cacheAPI: BROWSER_SUPPORT.checkCacheAPI(),
+            fileSystemAccess: BROWSER_SUPPORT.checkFileSystemAccess(),
+            serviceWorker: BROWSER_SUPPORT.checkServiceWorker(),
+            webAssembly: BROWSER_SUPPORT.checkWebAssembly(),
+            compressionStreams: BROWSER_SUPPORT.checkCompressionStreams()
+        };
+        
+        // 计算缓存能力评分 (0-100)
+        const weights = {
+            indexedDB: 20,
+            cacheAPI: 30,
+            fileSystemAccess: 40,
+            serviceWorker: 5,
+            webAssembly: 3,
+            compressionStreams: 2
+        };
+        
+        let score = 0;
+        for (const [feature, supported] of Object.entries(capabilities)) {
+            if (supported) {
+                score += weights[feature] || 0;
+            }
+        }
+        
+        capabilities.score = score;
+        capabilities.level = score >= 80 ? 'excellent' : 
+                           score >= 60 ? 'good' : 
+                           score >= 40 ? 'fair' : 'basic';
+        
+        return capabilities;
+    },
+    
+    // 新增：获取推荐的缓存策略
+    getRecommendedCacheStrategy: () => {
+        const capabilities = BROWSER_SUPPORT.getCacheCapabilities();
+        
+        if (capabilities.fileSystemAccess && CONFIG.CACHE.ENABLE_FILE_SYSTEM) {
+            return 'filesystem';
+        } else if (capabilities.cacheAPI && CONFIG.CACHE.ENABLE_CACHE_API) {
+            return 'cache-api';
+        } else if (capabilities.indexedDB) {
+            return 'indexeddb';
+        } else {
+            return 'memory-only';
+        }
     }
 };

@@ -1,7 +1,7 @@
 import { CONFIG, POSE_CONNECTIONS, KEYPOINT_NAMES } from '../utils/constants.js';
 import { ErrorHandler, EnvironmentChecker } from '../utils/errorHandling.js';
 import { performanceMonitor, PerformanceOptimizer } from '../utils/performance.js';
-import { modelCacheManager } from './ModelCacheManager.js';
+import { modelCacheManager } from './hybridCacheManager.js';
 import { OneEuroFilterManager } from './OneEuroFilterManager.js';
 
 /**

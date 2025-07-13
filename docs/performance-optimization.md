@@ -80,20 +80,21 @@ const preloadConfigs = [
 
 ## 🛠️ 技术实现
 
-### ModelCacheManager 类
+### HybridCacheManager 类
 
 ```javascript
-class ModelCacheManager {
+class HybridCacheManager {
     constructor() {
-        this.modelCache = new Map();        // 内存缓存
-        this.dbName = 'PoseEstimatorCache'; // IndexedDB名称
-        this.modelVersion = '1.0.0';        // 版本控制
+        this.primaryCache = null;           // 主缓存策略
+        this.fallbackCache = null;          // 备用缓存策略
+        this.cacheType = 'unknown';         // 当前缓存类型
+        this.modelInstances = new Map();    // 内存模型实例
     }
     
     // 核心方法
-    async getOrCreateModel(modelType, config)
-    async preloadModel(modelType, config)
-    async cleanExpiredCache()
+    async getOrCreateModel(modelType, modelUrl, createModelFn)
+    async detectBestCacheStrategy()
+    async cacheModelInAllLayers(modelType, modelUrl, model)
 }
 ```
 
@@ -101,7 +102,7 @@ class ModelCacheManager {
 
 1. **初始化阶段**
    ```javascript
-   await modelCacheManager.initDB();
+   await hybridCacheManager.init();
    ```
 
 2. **预加载阶段**
@@ -111,12 +112,12 @@ class ModelCacheManager {
 
 3. **使用阶段**
    ```javascript
-   const detector = await modelCacheManager.getOrCreateModel(modelType, config);
+   const detector = await hybridCacheManager.getOrCreateModel(modelType, modelUrl, createModelFn);
    ```
 
 4. **清理阶段**
    ```javascript
-   await modelCacheManager.cleanExpiredCache();
+   await hybridCacheManager.cleanupExpiredCache();
    ```
 
 ## 🔧 配置选项
@@ -201,8 +202,7 @@ console.log('缓存统计:', { memoryCache: 2, dbInitialized: true });
 ### 清理缓存
 ```javascript
 // 手动清理所有缓存
-modelCacheManager.modelCache.clear();
-await modelCacheManager.cleanExpiredCache();
+await hybridCacheManager.clearAll();
 ```
 
 ## 📈 最佳实践
@@ -225,7 +225,7 @@ await modelCacheManager.cleanExpiredCache();
 2. **Web Workers**：在后台线程中进行模型推理
 3. **模型量化**：使用更小的量化模型减少加载时间
 4. **智能预测**：基于用户行为预测需要的模型
-5. **边缘缓存**：利用Service Worker实现更高级的缓存策略
+5. **高级缓存策略**：实现更智能的缓存管理机制
 
 ---
 

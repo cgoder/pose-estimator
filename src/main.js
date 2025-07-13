@@ -1,7 +1,7 @@
 import { CONFIG } from './utils/constants.js';
 import { ErrorHandler, EnvironmentChecker, GlobalErrorHandler } from './utils/errorHandling.js';
 import { performanceMonitor, PerformanceOptimizer } from './utils/performance.js';
-import { modelCacheManager } from './components/ModelCacheManager.js';
+import { modelCacheManager } from './components/hybridCacheManager.js';
 import { PoseEstimator } from './components/PoseEstimator.js';
 import { uiManager } from './components/UIManager.js';
 
