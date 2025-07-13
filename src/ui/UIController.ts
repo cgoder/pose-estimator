@@ -19,6 +19,7 @@ export class UIController {
     
     this.setupEventListeners();
     this.createUI();
+    this.initializeDefaultStates();
     
     console.log('🎮 UI控制器已创建');
   }
@@ -52,8 +53,8 @@ export class UIController {
               <div class="panel-section">
                 <h3>📡 数据源</h3>
                 <div class="button-group">
-                  <button id="btn-camera" class="btn btn-primary">📷 摄像头</button>
-                  <button id="btn-video" class="btn btn-secondary">🎥 视频文件</button>
+                  <button id="btn-camera" class="btn btn-secondary">📷 摄像头</button>
+                  <button id="btn-video" class="btn btn-primary">🎥 视频文件</button>
                   <button id="btn-images" class="btn btn-secondary">🖼️ 图像序列</button>
                 </div>
                 <input type="file" id="file-input" accept="video/*,image/*" multiple style="display: none;">
@@ -193,6 +194,7 @@ export class UIController {
    */
   private async handleDataSourceSelection(type: 'camera'): Promise<void> {
     try {
+      this.updateDataSourceButtons('camera');
       this.showLoading('设置摄像头...');
       await poseApp.setDataSource(type);
       this.hideLoading();
@@ -207,6 +209,7 @@ export class UIController {
    * 处理文件选择
    */
   private handleFileSelection(type: 'video' | 'images'): void {
+    this.updateDataSourceButtons(type);
     const fileInput = document.getElementById('file-input') as HTMLInputElement;
     if (fileInput) {
       fileInput.setAttribute('data-type', type);
@@ -252,6 +255,7 @@ export class UIController {
    */
   private async handleModelSelection(modelType: string): Promise<void> {
     try {
+      this.updateModelButtons(modelType);
       this.showLoading(`切换到 ${modelType}...`);
       await poseApp.switchModel(modelType as any);
       this.hideLoading();
@@ -259,7 +263,43 @@ export class UIController {
       this.hideLoading();
       const message = error instanceof Error ? error.message : '未知错误';
       this.showError(`切换模型失败: ${message}`);
+      // 恢复之前的按钮状态
+      this.updateModelButtons(null);
     }
+  }
+
+  /**
+   * 更新数据源按钮状态
+   */
+  private updateDataSourceButtons(activeType: string | null): void {
+    const buttons = {
+      'camera': document.getElementById('btn-camera'),
+      'video': document.getElementById('btn-video'),
+      'images': document.getElementById('btn-images')
+    };
+
+    Object.entries(buttons).forEach(([type, button]) => {
+      if (button) {
+        button.className = type === activeType ? 'btn btn-primary' : 'btn btn-secondary';
+      }
+    });
+  }
+
+  /**
+   * 更新模型按钮状态
+   */
+  private updateModelButtons(activeModel: string | null): void {
+    const buttons = {
+      'MoveNet': document.getElementById('btn-movenet'),
+      'PoseNet': document.getElementById('btn-posenet'),
+      'BlazePose': document.getElementById('btn-blazepose')
+    };
+
+    Object.entries(buttons).forEach(([model, button]) => {
+      if (button) {
+        button.className = model === activeModel ? 'btn btn-primary' : 'btn btn-outline';
+      }
+    });
   }
 
   /**
@@ -396,6 +436,27 @@ export class UIController {
   private updateUIFromState(state: any): void {
     // 根据状态更新UI元素
     console.log('🎮 UI状态更新:', state);
+  }
+
+  /**
+   * 初始化默认状态
+   */
+  private initializeDefaultStates(): void {
+    // 设置默认数据源为视频文件
+    this.updateDataSourceButtons('video');
+    
+    // 设置默认模型为MoveNet
+    this.updateModelButtons('MoveNet');
+    
+    // 初始化控制按钮状态
+    this.updateControlButtons(false);
+    
+    // 设置初始状态显示
+    this.updateAppState('未初始化');
+    this.updateDataSource('视频文件');
+    this.updateCurrentModel('MoveNet');
+    
+    console.log('🎮 默认UI状态已初始化');
   }
 
   /**

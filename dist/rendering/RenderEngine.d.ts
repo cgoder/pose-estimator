@@ -12,6 +12,11 @@ export declare class CanvasRenderEngine implements RenderEngine {
     private animationId;
     private renderer;
     private _isInitialized;
+    private offscreenCanvas;
+    private offscreenCtx;
+    private lastRenderTime;
+    private renderThrottle;
+    private imageCache;
     private defaultConfig;
     /**
      * 检查是否已初始化
@@ -50,39 +55,47 @@ export declare class CanvasRenderEngine implements RenderEngine {
      */
     dispose(): void;
     /**
-     * 设置画布
+     * 优化的清空画布方法
      */
-    private setupCanvas;
+    private clearCanvas;
     /**
-     * 渲染姿态数据
+     * 优化的视频帧渲染
      */
-    private renderPoses;
+    private renderVideoFrameOptimized;
     /**
-     * 渲染骨骼连接
+     * 优化的姿态渲染
      */
-    private renderSkeleton;
+    private renderPosesOptimized;
     /**
-     * 渲染关键点
+     * 优化的骨骼渲染
      */
-    private renderKeypoints;
+    private renderSkeletonOptimized;
     /**
-     * 渲染边界框
+     * 优化的关键点渲染
      */
-    private renderBoundingBox;
+    private renderKeypointsOptimized;
     /**
-     * 渲染置信度信息
+     * 优化的边界框渲染
      */
-    private renderConfidence;
+    private renderBoundingBoxOptimized;
     /**
-     * 渲染分析结果
+     * 优化的置信度渲染
      */
-    private renderAnalysis;
+    private renderConfidenceOptimized;
     /**
-     * 渲染性能信息
+     * 优化的分析结果渲染
      */
-    private renderPerformance;
+    private renderAnalysisOptimized;
     /**
-     * 渲染无检测结果
+     * 优化的性能信息渲染
+     */
+    private renderPerformanceOptimized;
+    /**
+     * 设置Canvas上下文样式
+     */
+    private setupCanvasContext;
+    /**
+     * 渲染无检测状态
      */
     private renderNoDetection;
     /**
@@ -97,10 +110,6 @@ export declare class CanvasRenderEngine implements RenderEngine {
      * 十六进制颜色转RGBA
      */
     private hexToRgba;
-    /**
-     * 渲染视频帧背景
-     */
-    private renderVideoFrame;
 }
 /**
  * WebGL渲染引擎实现（高性能版本）

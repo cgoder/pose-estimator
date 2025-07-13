@@ -13,6 +13,12 @@ export class CanvasRenderEngine {
         this.animationId = null;
         this.renderer = null;
         this._isInitialized = false;
+        // 性能优化相关
+        this.offscreenCanvas = null;
+        this.offscreenCtx = null;
+        this.lastRenderTime = 0;
+        this.renderThrottle = 16; // 约60fps
+        this.imageCache = new Map();
         // 默认配置
         this.defaultConfig = {
             showKeypoints: true,
@@ -57,6 +63,15 @@ export class CanvasRenderEngine {
         if (!this.ctx) {
             throw new Error('无法获取Canvas 2D上下文');
         }
+        // 初始化离屏Canvas用于双缓冲
+        try {
+            this.offscreenCanvas = new OffscreenCanvas(this.canvas.width, this.canvas.height);
+            this.offscreenCtx = this.offscreenCanvas.getContext('2d');
+            console.log('✅ 离屏Canvas初始化成功，启用双缓冲渲染');
+        }
+        catch (error) {
+            console.warn('⚠️ 离屏Canvas不支持，使用单缓冲渲染:', error);
+        }
         // 合并配置
         if (config) {
             this.defaultConfig = {
@@ -69,7 +84,7 @@ export class CanvasRenderEngine {
                 showPerformance: config.showPerformance ?? this.defaultConfig.showPerformance
             };
         }
-        this.setupCanvas();
+        this.setupCanvasContext(this.ctx);
         this._isInitialized = true;
         eventBus.emit('render:initialized');
     }
@@ -81,33 +96,52 @@ export class CanvasRenderEngine {
             console.warn('渲染引擎未初始化');
             return;
         }
+        // 帧率控制
+        const now = performance.now();
+        if (now - this.lastRenderTime < this.renderThrottle) {
+            return;
+        }
+        this.lastRenderTime = now;
         try {
             // 如果有设置的渲染器，使用渲染器
             if (this.renderer) {
                 this.renderer.render(data);
                 return;
             }
-            // 否则使用内置渲染逻辑
+            // 选择渲染上下文（双缓冲或单缓冲）
+            const renderCtx = this.offscreenCtx || this.ctx;
+            const renderCanvas = this.offscreenCanvas || this.canvas;
+            if (!renderCtx)
+                return;
+            // 保存当前上下文状态
+            renderCtx.save();
             // 清空画布
-            this.clear();
+            this.clearCanvas(renderCtx, renderCanvas);
             // 渲染视频帧背景
             if (data.frame && data.frame.imageData) {
-                this.renderVideoFrame(data.frame.imageData);
+                this.renderVideoFrameOptimized(data.frame.imageData, renderCtx, renderCanvas);
             }
             // 渲染姿态数据
             if (data.poses.length > 0) {
-                this.renderPoses(data.poses);
+                this.renderPosesOptimized(data.poses, renderCtx);
             }
             else {
-                this.renderNoDetection();
+                this.renderNoDetection(renderCtx);
             }
             // 渲染分析结果
             if (data.analysis) {
-                this.renderAnalysis(data.analysis);
+                this.renderAnalysisOptimized(data.analysis, renderCtx, renderCanvas);
             }
             // 渲染性能信息
             if (data.performance && this.defaultConfig.showPerformance) {
-                this.renderPerformance(data.performance);
+                this.renderPerformanceOptimized(data.performance, renderCtx, renderCanvas);
+            }
+            // 恢复上下文状态
+            renderCtx.restore();
+            // 如果使用双缓冲，将离屏Canvas绘制到主Canvas
+            if (this.offscreenCanvas && this.offscreenCtx) {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.drawImage(this.offscreenCanvas, 0, 0);
             }
             eventBus.emit('render:frame', data);
         }
@@ -180,7 +214,17 @@ export class CanvasRenderEngine {
             return;
         this.canvas.width = width;
         this.canvas.height = height;
-        this.setupCanvas();
+        // 同时调整离屏Canvas尺寸
+        if (this.offscreenCanvas) {
+            this.offscreenCanvas.width = width;
+            this.offscreenCanvas.height = height;
+            if (this.offscreenCtx) {
+                this.setupCanvasContext(this.offscreenCtx);
+            }
+        }
+        if (this.ctx) {
+            this.setupCanvasContext(this.ctx);
+        }
         eventBus.emit('render:resized', { width, height });
     }
     /**
@@ -191,209 +235,244 @@ export class CanvasRenderEngine {
             cancelAnimationFrame(this.animationId);
             this.animationId = null;
         }
+        // 清理图像缓存
+        this.imageCache.forEach(bitmap => {
+            if (bitmap.close) {
+                bitmap.close();
+            }
+        });
+        this.imageCache.clear();
+        // 清理离屏Canvas
+        this.offscreenCanvas = null;
+        this.offscreenCtx = null;
         this.canvas = null;
         this.ctx = null;
         this._isInitialized = false;
         eventBus.emit('render:disposed');
     }
     /**
-     * 设置画布
+     * 优化的清空画布方法
      */
-    setupCanvas() {
-        if (!this.ctx)
-            return;
-        // 设置画布样式
-        this.ctx.lineCap = 'round';
-        this.ctx.lineJoin = 'round';
-        this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'top';
-        this.ctx.font = `${this.defaultConfig.fontSize}px ${this.defaultConfig.fontFamily}`;
+    clearCanvas(ctx, canvas) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // 绘制背景
+        if (this.defaultConfig.colors?.background) {
+            ctx.fillStyle = this.defaultConfig.colors.background;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
     }
     /**
-     * 渲染姿态数据
+     * 优化的视频帧渲染
      */
-    renderPoses(poses) {
-        if (!this.ctx)
-            return;
+    renderVideoFrameOptimized(imageData, ctx, canvas) {
+        try {
+            // 调整canvas尺寸以匹配视频帧（仅在必要时）
+            if (canvas.width !== imageData.width || canvas.height !== imageData.height) {
+                canvas.width = imageData.width;
+                canvas.height = imageData.height;
+                this.setupCanvasContext(ctx);
+                // 如果是离屏Canvas，也需要更新主Canvas尺寸
+                if (this.offscreenCanvas && this.canvas) {
+                    this.canvas.width = imageData.width;
+                    this.canvas.height = imageData.height;
+                }
+            }
+            // 直接绘制ImageData（最快的方式）
+            ctx.putImageData(imageData, 0, 0);
+        }
+        catch (error) {
+            console.warn('绘制视频帧失败:', error);
+            // 如果绘制失败，至少绘制一个背景色
+            ctx.fillStyle = this.defaultConfig.colors?.background || '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+    /**
+     * 优化的姿态渲染
+     */
+    renderPosesOptimized(poses, ctx) {
+        // 批量设置样式以减少状态切换
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         poses.forEach((pose, index) => {
+            // 渲染骨骼（先渲染，避免被关键点覆盖）
+            if (this.defaultConfig.showSkeleton) {
+                this.renderSkeletonOptimized(pose.keypoints, ctx);
+            }
             // 渲染关键点
             if (this.defaultConfig.showKeypoints) {
-                this.renderKeypoints(pose.keypoints);
-            }
-            // 渲染骨骼
-            if (this.defaultConfig.showSkeleton) {
-                this.renderSkeleton(pose.keypoints);
+                this.renderKeypointsOptimized(pose.keypoints, ctx);
             }
             // 渲染边界框
             if (this.defaultConfig.showBoundingBox && pose.box) {
-                this.renderBoundingBox(pose.box);
+                this.renderBoundingBoxOptimized(pose.box, ctx);
             }
             // 渲染置信度
             if (this.defaultConfig.showConfidence) {
-                this.renderConfidence(pose.score || 0, index);
+                this.renderConfidenceOptimized(pose.score || 0, index, ctx);
             }
         });
     }
     /**
-     * 渲染骨骼连接
+     * 优化的骨骼渲染
      */
-    renderSkeleton(keypoints) {
-        if (!this.ctx)
-            return;
+    renderSkeletonOptimized(keypoints, ctx) {
         const connections = this.getSkeletonConnections();
-        this.ctx.strokeStyle = this.defaultConfig.colors.skeleton;
-        this.ctx.lineWidth = this.defaultConfig.skeletonLineWidth;
+        // 批量开始路径
+        ctx.beginPath();
+        ctx.strokeStyle = this.defaultConfig.colors.skeleton;
+        ctx.lineWidth = this.defaultConfig.skeletonLineWidth;
         for (const [startName, endName] of connections) {
             const startPoint = this.findKeypoint(keypoints, startName);
             const endPoint = this.findKeypoint(keypoints, endName);
             if (startPoint && endPoint &&
                 startPoint.score > (this.defaultConfig.confidenceThreshold || 0.3) &&
                 endPoint.score > (this.defaultConfig.confidenceThreshold || 0.3)) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(startPoint.x, startPoint.y);
-                this.ctx.lineTo(endPoint.x, endPoint.y);
-                this.ctx.stroke();
+                ctx.moveTo(startPoint.x, startPoint.y);
+                ctx.lineTo(endPoint.x, endPoint.y);
+            }
+        }
+        // 批量绘制所有线条
+        ctx.stroke();
+    }
+    /**
+     * 优化的关键点渲染
+     */
+    renderKeypointsOptimized(keypoints, ctx) {
+        // 按置信度分组关键点以减少样式切换
+        const validKeypoints = keypoints.filter(kp => kp.score > (this.defaultConfig.confidenceThreshold || 0.3));
+        if (validKeypoints.length === 0)
+            return;
+        // 批量绘制关键点
+        ctx.beginPath();
+        for (const keypoint of validKeypoints) {
+            ctx.moveTo(keypoint.x + this.defaultConfig.keypointRadius, keypoint.y);
+            ctx.arc(keypoint.x, keypoint.y, this.defaultConfig.keypointRadius, 0, 2 * Math.PI);
+        }
+        // 根据置信度设置颜色
+        const avgConfidence = validKeypoints.reduce((sum, kp) => sum + kp.score, 0) / validKeypoints.length;
+        const alpha = Math.min(1, avgConfidence * 1.5);
+        ctx.fillStyle = this.hexToRgba(this.defaultConfig.colors.keypoint, alpha);
+        ctx.fill();
+        // 可选：渲染关键点标签（仅在需要时）
+        if (this.defaultConfig.showConfidence && validKeypoints.length <= 5) { // 限制标签数量
+            ctx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
+            ctx.font = `${this.defaultConfig.fontSize}px ${this.defaultConfig.fontFamily}`;
+            for (const keypoint of validKeypoints) {
+                ctx.fillText(`${(keypoint.score * 100).toFixed(0)}%`, keypoint.x + this.defaultConfig.keypointRadius + 2, keypoint.y - this.defaultConfig.keypointRadius);
             }
         }
     }
     /**
-     * 渲染关键点
+     * 优化的边界框渲染
      */
-    renderKeypoints(keypoints) {
-        if (!this.ctx)
-            return;
-        for (const keypoint of keypoints) {
-            if (keypoint.score > (this.defaultConfig.confidenceThreshold || 0.3)) {
-                // 根据置信度调整颜色透明度
-                const alpha = Math.min(1, keypoint.score * 1.5);
-                this.ctx.fillStyle = this.hexToRgba(this.defaultConfig.colors.keypoint, alpha);
-                this.ctx.beginPath();
-                this.ctx.arc(keypoint.x, keypoint.y, this.defaultConfig.keypointRadius, 0, 2 * Math.PI);
-                this.ctx.fill();
-                // 渲染关键点标签
-                if (this.defaultConfig.showConfidence) {
-                    this.ctx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
-                    this.ctx.fillText(`${keypoint.name}: ${(keypoint.score * 100).toFixed(0)}%`, keypoint.x + this.defaultConfig.keypointRadius + 2, keypoint.y - this.defaultConfig.keypointRadius);
-                }
-            }
-        }
+    renderBoundingBoxOptimized(box, ctx) {
+        ctx.strokeStyle = this.defaultConfig.colors.boundingBox || '#95E1D3';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(box.x, box.y, box.width, box.height);
     }
     /**
-     * 渲染边界框
+     * 优化的置信度渲染
      */
-    renderBoundingBox(box) {
-        if (!this.ctx)
-            return;
-        this.ctx.strokeStyle = this.defaultConfig.colors.boundingBox || '#95E1D3';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(box.x, box.y, box.width, box.height);
+    renderConfidenceOptimized(score, index, ctx) {
+        ctx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
+        ctx.font = `${this.defaultConfig.fontSize}px ${this.defaultConfig.fontFamily}`;
+        ctx.fillText(`姿态 ${index + 1}: ${(score * 100).toFixed(1)}%`, 10, 10 + index * 20);
     }
     /**
-     * 渲染置信度信息
+     * 优化的分析结果渲染
      */
-    renderConfidence(score, index) {
-        if (!this.ctx)
-            return;
-        this.ctx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
-        this.ctx.fillText(`姿态 ${index + 1} 置信度: ${(score * 100).toFixed(1)}%`, 10, 10 + index * 20);
-    }
-    /**
-     * 渲染分析结果
-     */
-    renderAnalysis(analysisResult) {
-        if (!this.ctx || !this.canvas)
-            return;
+    renderAnalysisOptimized(analysisResult, ctx, _canvas) {
         const x = 10;
         let y = 40;
         const lineHeight = (this.defaultConfig.fontSize || 12) + 4;
-        this.ctx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
-        // 渲染时间戳
-        this.ctx.fillText(`分析时间: ${new Date(analysisResult.timestamp).toLocaleTimeString()}`, x, y);
-        y += lineHeight;
-        // 渲染重复次数
+        ctx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
+        ctx.font = `${this.defaultConfig.fontSize}px ${this.defaultConfig.fontFamily}`;
+        // 批量准备文本内容
+        const textLines = [];
+        textLines.push(`分析时间: ${new Date(analysisResult.timestamp).toLocaleTimeString()}`);
         if (analysisResult.repetition) {
-            this.ctx.fillText(`重复次数: ${analysisResult.repetition.count}`, x, y);
-            y += lineHeight;
-            this.ctx.fillText(`当前阶段: ${analysisResult.repetition.phase}`, x, y);
-            y += lineHeight;
-            this.ctx.fillText(`置信度: ${(analysisResult.repetition.confidence * 100).toFixed(1)}%`, x, y);
-            y += lineHeight;
+            textLines.push(`重复次数: ${analysisResult.repetition.count}`);
+            textLines.push(`当前阶段: ${analysisResult.repetition.phase}`);
+            textLines.push(`置信度: ${(analysisResult.repetition.confidence * 100).toFixed(1)}%`);
         }
-        // 渲染姿态评估
         if (analysisResult.posture) {
-            y += 10; // 间距
-            this.ctx.fillText('姿态评估:', x, y);
-            y += lineHeight;
-            this.ctx.fillText(`  评分: ${analysisResult.posture.score.toFixed(1)}`, x, y);
-            y += lineHeight;
+            textLines.push(''); // 空行
+            textLines.push('姿态评估:');
+            textLines.push(`  评分: ${analysisResult.posture.score.toFixed(1)}`);
             if (analysisResult.posture.issues.length > 0) {
-                this.ctx.fillText('  问题:', x, y);
-                y += lineHeight;
+                textLines.push('  问题:');
                 for (const issue of analysisResult.posture.issues.slice(0, 3)) {
-                    this.ctx.fillText(`    • ${issue}`, x, y);
-                    y += lineHeight;
+                    textLines.push(`    • ${issue}`);
                 }
             }
         }
-        // 渲染跑姿分析
         if (analysisResult.runningGait) {
-            y += 10; // 间距
-            this.ctx.fillText('跑姿分析:', x, y);
-            y += lineHeight;
-            this.ctx.fillText(`  步频: ${analysisResult.runningGait.cadence.toFixed(1)} spm`, x, y);
-            y += lineHeight;
-            this.ctx.fillText(`  步长: ${analysisResult.runningGait.strideLength.toFixed(2)} m`, x, y);
-            y += lineHeight;
-            this.ctx.fillText(`  触地时间: ${analysisResult.runningGait.groundContactTime.toFixed(0)} ms`, x, y);
-            y += lineHeight;
+            textLines.push(''); // 空行
+            textLines.push('跑姿分析:');
+            textLines.push(`  步频: ${analysisResult.runningGait.cadence.toFixed(1)} spm`);
+            textLines.push(`  步长: ${analysisResult.runningGait.strideLength.toFixed(2)} m`);
+            textLines.push(`  触地时间: ${analysisResult.runningGait.groundContactTime.toFixed(0)} ms`);
+        }
+        // 批量绘制文本
+        for (const line of textLines) {
+            if (line === '') {
+                y += lineHeight / 2; // 空行
+            }
+            else {
+                ctx.fillText(line, x, y);
+                y += lineHeight;
+            }
         }
     }
     /**
-     * 渲染性能信息
+     * 优化的性能信息渲染
      */
-    renderPerformance(performance) {
-        if (!this.ctx || !this.canvas)
-            return;
-        const x = this.canvas.width - 200;
+    renderPerformanceOptimized(performance, ctx, canvas) {
+        const x = canvas.width - 200;
         let y = 20;
         const lineHeight = 20;
-        // 设置文本样式
-        this.ctx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
-        this.ctx.font = `${this.defaultConfig.fontSize}px ${this.defaultConfig.fontFamily}`;
-        // 渲染性能指标
-        this.ctx.fillText('性能指标:', x, y);
-        y += lineHeight;
-        this.ctx.fillText(`  帧率: ${performance.frameRate.toFixed(1)} FPS`, x, y);
-        y += lineHeight;
-        this.ctx.fillText(`  推理时间: ${performance.inferenceTime.toFixed(1)} ms`, x, y);
-        y += lineHeight;
-        this.ctx.fillText(`  平均帧时间: ${performance.averageFrameTime.toFixed(1)} ms`, x, y);
-        y += lineHeight;
+        ctx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
+        ctx.font = `${this.defaultConfig.fontSize}px ${this.defaultConfig.fontFamily}`;
+        // 批量准备性能文本
+        const perfLines = [
+            '性能指标:',
+            `  帧率: ${performance.frameRate.toFixed(1)} FPS`,
+            `  推理时间: ${performance.inferenceTime.toFixed(1)} ms`,
+            `  平均帧时间: ${performance.averageFrameTime.toFixed(1)} ms`
+        ];
         if (performance.memoryUsage) {
-            this.ctx.fillText(`  内存使用: ${(performance.memoryUsage.used / 1024 / 1024).toFixed(1)} MB`, x, y);
-            y += lineHeight;
+            perfLines.push(`  内存使用: ${(performance.memoryUsage.used / 1024 / 1024).toFixed(1)} MB`);
         }
         if (performance.tensorflowMemory) {
-            this.ctx.fillText(`  张量数量: ${performance.tensorflowMemory.numTensors}`, x, y);
+            perfLines.push(`  TF内存: ${performance.tensorflowMemory.numTensors} 张量`);
+        }
+        // 批量绘制性能文本
+        for (const line of perfLines) {
+            ctx.fillText(line, x, y);
             y += lineHeight;
         }
     }
     /**
-     * 渲染无检测结果
+     * 设置Canvas上下文样式
      */
-    renderNoDetection() {
-        if (!this.ctx || !this.canvas)
+    setupCanvasContext(ctx) {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.font = `${this.defaultConfig.fontSize}px ${this.defaultConfig.fontFamily}`;
+    }
+    /**
+     * 渲染无检测状态
+     */
+    renderNoDetection(ctx) {
+        const renderCtx = ctx || this.ctx;
+        if (!renderCtx || !this.canvas)
             return;
-        const text = '未检测到人体姿态';
-        const x = this.canvas.width / 2;
-        const y = this.canvas.height / 2;
-        this.ctx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(text, x, y);
-        // 重置文本对齐
-        this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'top';
+        renderCtx.fillStyle = this.defaultConfig.colors.text || '#FFFFFF';
+        renderCtx.font = `${(this.defaultConfig.fontSize || 14) + 2}px ${this.defaultConfig.fontFamily}`;
+        renderCtx.fillText('未检测到姿态', this.canvas.width / 2 - 60, this.canvas.height / 2);
     }
     /**
      * 获取骨骼连接定义
@@ -438,29 +517,6 @@ export class CanvasRenderEngine {
         const g = parseInt(hex.slice(3, 5), 16);
         const b = parseInt(hex.slice(5, 7), 16);
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-    /**
-     * 渲染视频帧背景
-     */
-    renderVideoFrame(imageData) {
-        if (!this.canvas || !this.ctx)
-            return;
-        try {
-            // 调整canvas尺寸以匹配视频帧
-            if (this.canvas.width !== imageData.width || this.canvas.height !== imageData.height) {
-                this.canvas.width = imageData.width;
-                this.canvas.height = imageData.height;
-                this.setupCanvas();
-            }
-            // 绘制视频帧
-            this.ctx.putImageData(imageData, 0, 0);
-        }
-        catch (error) {
-            console.warn('绘制视频帧失败:', error);
-            // 如果绘制失败，至少绘制一个背景色
-            this.ctx.fillStyle = this.defaultConfig.colors?.background || '#000000';
-            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        }
     }
 }
 /**

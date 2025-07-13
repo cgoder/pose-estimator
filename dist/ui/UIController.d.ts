@@ -35,6 +35,14 @@ export declare class UIController {
      */
     private handleModelSelection;
     /**
+     * 更新数据源按钮状态
+     */
+    private updateDataSourceButtons;
+    /**
+     * 更新模型按钮状态
+     */
+    private updateModelButtons;
+    /**
      * 处理开始按钮
      */
     private handleStart;
@@ -86,6 +94,10 @@ export declare class UIController {
      * 根据状态更新UI
      */
     private updateUIFromState;
+    /**
+     * 初始化默认状态
+     */
+    private initializeDefaultStates;
     /**
      * 添加样式
      */
