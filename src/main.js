@@ -1,9 +1,14 @@
 import { CONFIG } from './utils/constants.js';
 import { ErrorHandler, EnvironmentChecker, GlobalErrorHandler } from './utils/errorHandling.js';
 import { performanceMonitor, PerformanceOptimizer } from './utils/performance.js';
-import { modelCacheManager } from './components/hybridCacheManager.js';
+import { adaptiveFrameController } from './utils/adaptiveFrameController.js';
+import { hybridCacheManager as modelCacheManager } from './components/HybridCacheManager.js';
 import { PoseEstimator } from './components/PoseEstimator.js';
 import { uiManager } from './components/UIManager.js';
+
+// 暴露到全局作用域以便调试和监控面板访问
+window.performanceMonitor = performanceMonitor;
+window.adaptiveFrameController = adaptiveFrameController;
 
 /**
  * 主应用类

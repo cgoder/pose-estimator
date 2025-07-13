@@ -180,6 +180,31 @@ export class CachePerformanceMonitor {
         
         const report = this.getPerformanceReport();
         
+        // 获取帧率控制器统计（如果可用）
+        let frameControlStats = '';
+        if (window.adaptiveFrameController && typeof window.adaptiveFrameController.getStats === 'function') {
+            try {
+                const frameStats = window.adaptiveFrameController.getStats();
+                frameControlStats = `
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-weight: bold; margin-bottom: 5px; color: #3498db;">🎯 自适应帧率控制</div>
+                        <div style="margin-bottom: 3px;">目标FPS: ${frameStats.targetFPS}</div>
+                        <div style="margin-bottom: 3px;">实际FPS: ${frameStats.actualFPS}</div>
+                        <div style="margin-bottom: 3px;">平均推理时间: ${frameStats.averageInferenceTime}ms</div>
+                        <div style="margin-bottom: 3px;">跳帧率: ${frameStats.skipRate}%</div>
+                        <div style="margin-bottom: 3px;">处理效率: ${frameStats.efficiency}%</div>
+                        <div style="margin-bottom: 3px;">设备评分: ${frameStats.deviceScore}</div>
+                    </div>
+                `;
+            } catch (error) {
+                frameControlStats = `
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2);">
+                        <div style="color: #ff6b6b;">🎯 帧率控制器数据获取失败</div>
+                    </div>
+                `;
+            }
+        }
+        
         panel.innerHTML = `
             <div style="font-weight: bold; margin-bottom: 10px; color: #3498db;">
                 📊 缓存性能监控
@@ -205,6 +230,7 @@ export class CachePerformanceMonitor {
             <div style="margin-bottom: 5px;">
                 <span style="color: #e67e22;">错误:</span> ${report.errorCount}
             </div>
+            ${frameControlStats}
             <div style="font-size: 10px; color: #95a5a6; margin-top: 10px;">
                 更新时间: ${report.lastUpdated}
             </div>

@@ -1,7 +1,8 @@
 import { CONFIG, POSE_CONNECTIONS, KEYPOINT_NAMES } from '../utils/constants.js';
 import { ErrorHandler, EnvironmentChecker } from '../utils/errorHandling.js';
 import { performanceMonitor, PerformanceOptimizer } from '../utils/performance.js';
-import { modelCacheManager } from './hybridCacheManager.js';
+import { adaptiveFrameController } from '../utils/adaptiveFrameController.js';
+import { hybridCacheManager } from './HybridCacheManager.js';
 import { OneEuroFilterManager } from './OneEuroFilterManager.js';
 
 /**
@@ -31,6 +32,11 @@ export class PoseEstimator {
         
         // 初始化滤波器管理器
         this.filterManager = new OneEuroFilterManager(options.filterParams);
+        
+        // 初始化自适应帧率控制器
+        adaptiveFrameController.initialize().catch(error => {
+            console.warn('⚠️ 自适应帧率控制器初始化失败:', error);
+        });
         
         // 性能统计
         this.stats = {
@@ -173,7 +179,7 @@ export class PoseEstimator {
             const modelUrl = this.options.modelType === 'MoveNet' ? 
                 CONFIG.MODEL.MOVENET_URL : CONFIG.MODEL.POSENET_URL;
             
-            this.detector = await modelCacheManager.getOrCreateModel(
+            this.detector = await hybridCacheManager.getOrCreateModel(
                 this.options.modelType,
                 modelUrl,
                 async () => {
@@ -213,7 +219,14 @@ export class PoseEstimator {
         if (!this.isRunning) return;
         
         try {
+            // 检查是否应该处理当前帧（自适应帧率控制）
+            if (!adaptiveFrameController.shouldProcessFrame()) {
+                this.animationId = requestAnimationFrame(() => this._detectPoseInRealTime());
+                return;
+            }
+            
             const frameStartTime = performanceMonitor.frameStart();
+            const inferenceStartTime = performance.now();
             
             // 检查video状态
             if (!this.video || this.video.readyState < 2) {
@@ -229,6 +242,10 @@ export class PoseEstimator {
             
             // 姿态检测
             const poses = await this.detector.estimatePoses(this.video);
+            
+            // 记录推理时间
+            const inferenceTime = performance.now() - inferenceStartTime;
+            adaptiveFrameController.recordInferenceTime(inferenceTime);
             
             if (poses && poses.length > 0) {
                 const pose = poses[0];
@@ -262,6 +279,7 @@ export class PoseEstimator {
             const now = performance.now();
             if (now - this.stats.lastStatsUpdate > 5000) {
                 performanceMonitor.logPerformance();
+                adaptiveFrameController.logPerformance(); // 添加帧率控制器日志
                 this.stats.lastStatsUpdate = now;
             }
             
@@ -502,7 +520,7 @@ export class PoseEstimator {
             },
             options: this.options,
             performance: performanceMonitor.getReport(),
-            cache: modelCacheManager.getStats(),
+            cache: hybridCacheManager.getStats(),
             filter: this.filterManager.getStats()
         };
     }
@@ -542,7 +560,7 @@ export class PoseEstimator {
         ];
         
         const preloadPromises = modelConfigs.map(config => 
-            modelCacheManager.preloadModel(config.type, config.url, config.createFn)
+            hybridCacheManager.preloadModel(config.type, config.url, config.createFn)
         );
         
         try {
