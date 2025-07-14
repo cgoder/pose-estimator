@@ -12,10 +12,15 @@ export class UIManager {
         this.statusElement = null;
         this.filterPanelElement = null;
         this.modelPanelElement = null;
+        this.poseEstimator = null;
         
         this.isInitialized = false;
         
+        // 确保方法正确绑定
+        this.setPoseEstimator = this.setPoseEstimator.bind(this);
+        
         console.log('🎨 UIManager已初始化');
+        console.log('🔧 setPoseEstimator方法类型:', typeof this.setPoseEstimator);
     }
     
     /**
@@ -30,6 +35,7 @@ export class UIManager {
         this.createStatusElement();
         this.createModelPanelElement();
         this.createFilterPanelElement();
+        this.createCameraSwitchButton();
         
         this.isInitialized = true;
         console.log('✅ UI元素初始化完成');
@@ -643,6 +649,146 @@ export class UIManager {
         });
         
         document.body.appendChild(this.statusElement);
+    }
+
+    /**
+     * 创建摄像头切换按钮
+     */
+    createCameraSwitchButton() {
+        this.cameraSwitchButton = document.createElement('button');
+        this.cameraSwitchButton.id = 'camera-switch-btn';
+        this.cameraSwitchButton.innerHTML = '📷';
+        this.cameraSwitchButton.title = '切换摄像头';
+        this.cameraSwitchButton.style.cssText = `
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        `;
+
+        // 添加到canvas容器中
+        const canvasContainer = document.querySelector('.canvas-container');
+        if (canvasContainer) {
+            canvasContainer.appendChild(this.cameraSwitchButton);
+        } else {
+            // 如果没有canvas容器，添加到body
+            document.body.appendChild(this.cameraSwitchButton);
+        }
+
+        // 绑定点击事件
+        this.cameraSwitchButton.addEventListener('click', async () => {
+            await this.handleCameraSwitch();
+        });
+    }
+
+    /**
+     * 处理摄像头切换
+     */
+    async handleCameraSwitch() {
+        if (!this.poseEstimator) {
+            console.warn('PoseEstimator not initialized');
+            return;
+        }
+
+        try {
+            // 检查设备是否支持摄像头切换
+            const hasMultipleCameras = await this.poseEstimator.checkCameraSwitchSupport();
+            if (!hasMultipleCameras) {
+                this.showError('设备不支持摄像头切换或只有一个摄像头');
+                return;
+            }
+
+            // 显示切换状态
+            this.setCameraSwitchState('switching');
+            
+            // 执行摄像头切换
+            await this.poseEstimator.switchCamera();
+            
+            // 切换成功
+            this.setCameraSwitchState('success');
+            
+            // 更新按钮状态
+            const currentMode = this.poseEstimator.getCurrentFacingMode();
+            this.updateCameraSwitchButton(currentMode);
+            
+        } catch (error) {
+            console.error('Camera switch failed:', error);
+            this.setCameraSwitchState('error');
+            this.showError(`摄像头切换失败: ${error.message}`);
+        }
+    }
+
+    /**
+     * 设置摄像头切换状态
+     */
+    setCameraSwitchState(state) {
+        if (!this.cameraSwitchButton) return;
+
+        switch (state) {
+            case 'switching':
+                this.cameraSwitchButton.disabled = true;
+                this.cameraSwitchButton.innerHTML = '🔄';
+                this.cameraSwitchButton.style.animation = 'cameraSwitch 1s infinite';
+                break;
+            case 'success':
+                this.cameraSwitchButton.disabled = false;
+                this.cameraSwitchButton.style.animation = 'none';
+                // 图标会在updateCameraSwitchButton中更新
+                break;
+            case 'error':
+                this.cameraSwitchButton.disabled = false;
+                this.cameraSwitchButton.innerHTML = '❌';
+                this.cameraSwitchButton.style.animation = 'none';
+                // 2秒后恢复正常状态
+                setTimeout(() => {
+                    const currentMode = this.poseEstimator?.getCurrentFacingMode() || 'user';
+                    this.updateCameraSwitchButton(currentMode);
+                }, 2000);
+                break;
+        }
+    }
+
+    /**
+     * 更新摄像头切换按钮显示
+     */
+    updateCameraSwitchButton(facingMode) {
+        if (!this.cameraSwitchButton) return;
+
+        // 根据当前摄像头模式更新图标和提示
+        if (facingMode === 'user') {
+            this.cameraSwitchButton.innerHTML = '🤳'; // 前置摄像头图标
+            this.cameraSwitchButton.title = '当前：前置摄像头，点击切换到后置';
+        } else {
+            this.cameraSwitchButton.innerHTML = '📷'; // 后置摄像头图标
+            this.cameraSwitchButton.title = '当前：后置摄像头，点击切换到前置';
+        }
+    }
+
+    /**
+     * 设置PoseEstimator实例引用
+     */
+    setPoseEstimator(poseEstimator) {
+        this.poseEstimator = poseEstimator;
+        
+        // 初始化按钮状态
+        if (this.cameraSwitchButton && poseEstimator) {
+            const currentMode = poseEstimator.getCurrentFacingMode();
+            this.updateCameraSwitchButton(currentMode);
+        }
     }
 
     /**

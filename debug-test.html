@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Test</title>
+</head>
+<body>
+    <h1>Debug Test</h1>
+    <div id="output"></div>
+    
+    <script type="module">
+        const output = document.getElementById('output');
+        
+        function log(message) {
+            console.log(message);
+            output.innerHTML += '<p>' + message + '</p>';
+        }
+        
+        try {
+            log('开始导入 UIManager...');
+            
+            // 导入 UIManager
+            const { uiManager } = await import('./src/components/UIManager.js');
+            
+            log('UIManager 导入成功');
+            log('uiManager 类型: ' + typeof uiManager);
+            log('uiManager 构造函数: ' + uiManager.constructor.name);
+            
+            // 检查 setPoseEstimator 方法
+            log('setPoseEstimator 类型: ' + typeof uiManager.setPoseEstimator);
+            log('setPoseEstimator 是否为函数: ' + (typeof uiManager.setPoseEstimator === 'function'));
+            
+            // 列出所有方法
+            const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(uiManager))
+                .filter(name => typeof uiManager[name] === 'function' && name !== 'constructor');
+            log('可用方法: ' + methods.join(', '));
+            
+            // 尝试调用 setPoseEstimator
+            if (typeof uiManager.setPoseEstimator === 'function') {
+                log('尝试调用 setPoseEstimator...');
+                uiManager.setPoseEstimator(null);
+                log('setPoseEstimator 调用成功');
+            } else {
+                log('ERROR: setPoseEstimator 不是函数!');
+            }
+            
+        } catch (error) {
+            log('ERROR: ' + error.message);
+            log('ERROR Stack: ' + error.stack);
+        }
+    </script>
+</body>
+</html>

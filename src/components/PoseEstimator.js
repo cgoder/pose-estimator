@@ -22,6 +22,10 @@ export class PoseEstimator {
         this.isRunning = false;
         this.animationId = null;
         
+        // 摄像头相关状态
+        this.currentFacingMode = CONFIG.CAMERA.DEFAULT_FACING_MODE;
+        this.isSwitchingCamera = false;
+        
         // 配置选项
         this.options = {
             modelType: options.modelType || CONFIG.MODEL.DEFAULT_TYPE,
@@ -91,11 +95,12 @@ export class PoseEstimator {
     
     /**
      * 设置摄像头
+     * @param {string} facingMode - 摄像头模式 ('user' 或 'environment')
      * @returns {Promise<void>}
      */
-    async _setupCamera() {
+    async _setupCamera(facingMode = this.currentFacingMode) {
         try {
-            console.log('📷 正在设置摄像头...');
+            console.log(`📷 正在设置摄像头 (${facingMode === 'user' ? '前置' : '后置'})...`);
             
             // 创建隐藏的video元素
             this.video = document.createElement('video');
@@ -122,9 +127,18 @@ export class PoseEstimator {
             // 添加到DOM
             document.body.appendChild(this.video);
             
+            // 构建摄像头约束
+            const constraints = {
+                video: {
+                    width: { ideal: CONFIG.CAMERA.WIDTH },
+                    height: { ideal: CONFIG.CAMERA.HEIGHT },
+                    facingMode: facingMode
+                }
+            };
+            
             // 获取摄像头流
             const stream = await ErrorHandler.retry(
-                () => navigator.mediaDevices.getUserMedia(CONFIG.CAMERA.CONSTRAINTS),
+                () => navigator.mediaDevices.getUserMedia(constraints),
                 3,
                 1000
             );
@@ -189,7 +203,10 @@ export class PoseEstimator {
             this.canvas.width = this.video.videoWidth || CONFIG.CAMERA.WIDTH;
             this.canvas.height = this.video.videoHeight || CONFIG.CAMERA.HEIGHT;
             
-            console.log(`📷 摄像头设置完成: ${this.canvas.width}x${this.canvas.height}`);
+            // 更新当前摄像头模式
+            this.currentFacingMode = facingMode;
+            
+            console.log(`📷 摄像头设置完成: ${this.canvas.width}x${this.canvas.height} (${facingMode === 'user' ? '前置' : '后置'})`);
             
         } catch (error) {
             // 清理资源
@@ -532,6 +549,94 @@ export class PoseEstimator {
         performanceMonitor.stop();
         
         console.log('✅ 姿态估计器已停止');
+    }
+    
+    /**
+     * 切换摄像头（前置/后置）
+     * @returns {Promise<void>}
+     */
+    async switchCamera() {
+        if (this.isSwitchingCamera) {
+            console.warn('⚠️ 摄像头切换正在进行中，请稍候...');
+            return;
+        }
+        
+        try {
+            this.isSwitchingCamera = true;
+            
+            // 确定新的摄像头模式
+            const newFacingMode = this.currentFacingMode === CONFIG.CAMERA.FACING_MODES.FRONT 
+                ? CONFIG.CAMERA.FACING_MODES.BACK 
+                : CONFIG.CAMERA.FACING_MODES.FRONT;
+            
+            console.log(`🔄 切换摄像头: ${this.currentFacingMode === 'user' ? '前置' : '后置'} → ${newFacingMode === 'user' ? '前置' : '后置'}`);
+            
+            // 记录当前运行状态
+            const wasRunning = this.isRunning;
+            
+            // 暂停检测
+            if (wasRunning) {
+                await this.stop();
+            }
+            
+            // 清理当前摄像头
+            if (this.video) {
+                if (this.video.srcObject) {
+                    const tracks = this.video.srcObject.getTracks();
+                    tracks.forEach(track => track.stop());
+                }
+                if (this.video.parentNode) {
+                    this.video.parentNode.removeChild(this.video);
+                }
+                this.video = null;
+            }
+            
+            // 设置新摄像头
+            await this._setupCamera(newFacingMode);
+            
+            // 如果之前在运行，重新启动检测
+            if (wasRunning) {
+                this.isRunning = true;
+                this._detectPoseInRealTime();
+            }
+            
+            console.log(`✅ 摄像头切换完成: ${newFacingMode === 'user' ? '前置' : '后置'}`);
+            
+        } catch (error) {
+            console.error('❌ 摄像头切换失败:', error);
+            throw ErrorHandler.createError('Camera', `摄像头切换失败: ${error.message}`, error);
+        } finally {
+            this.isSwitchingCamera = false;
+        }
+    }
+    
+    /**
+     * 获取当前摄像头模式
+     * @returns {string} 当前摄像头模式
+     */
+    getCurrentFacingMode() {
+        return this.currentFacingMode;
+    }
+    
+    /**
+     * 检查是否支持摄像头切换
+     * @returns {Promise<boolean>} 是否支持摄像头切换
+     */
+    async checkCameraSwitchSupport() {
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                return false;
+            }
+            
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            
+            // 检查是否有多个摄像头设备
+            return videoDevices.length > 1;
+        } catch (error) {
+            console.warn('⚠️ 检查摄像头支持时出错:', error);
+            return false;
+        }
     }
     
     /**

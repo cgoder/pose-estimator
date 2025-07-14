@@ -19,6 +19,58 @@ export const CONFIG = {
                 height: { ideal: 480 },
                 facingMode: 'user'
             }
+        },
+        // 摄像头切换配置
+        FACING_MODES: {
+            FRONT: 'user',
+            BACK: 'environment'
+        },
+        // 默认摄像头
+        DEFAULT_FACING_MODE: 'user',
+        
+        // 高级摄像头配置
+        ADVANCED: {
+            // 切换超时时间
+            SWITCH_TIMEOUT: 5000,
+            // 重试次数
+            MAX_RETRY_COUNT: 3,
+            // 重试延迟
+            RETRY_DELAY: 1000,
+            // 支持的分辨率预设
+            RESOLUTION_PRESETS: {
+                LOW: { width: 320, height: 240 },
+                MEDIUM: { width: 640, height: 480 },
+                HIGH: { width: 1280, height: 720 },
+                FULL_HD: { width: 1920, height: 1080 }
+            },
+            // 帧率配置
+            FRAME_RATE: {
+                MIN: 15,
+                IDEAL: 30,
+                MAX: 60
+            },
+            // 自动调整配置
+            AUTO_ADJUST: {
+                ENABLED: true,
+                // 性能阈值（毫秒）
+                PERFORMANCE_THRESHOLD: 50,
+                // 降级策略
+                FALLBACK_RESOLUTIONS: ['MEDIUM', 'LOW'],
+                // 监控间隔
+                MONITOR_INTERVAL: 5000
+            }
+        },
+        
+        // 错误处理配置
+        ERROR_HANDLING: {
+            // 自动重试
+            AUTO_RETRY: true,
+            // 降级策略
+            FALLBACK_ENABLED: true,
+            // 错误报告
+            ERROR_REPORTING: true,
+            // 用户友好提示
+            USER_FRIENDLY_MESSAGES: true
         }
     },
     

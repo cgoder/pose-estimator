@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修复测试</title>
+</head>
+<body>
+    <h1>修复测试</h1>
+    <div id="output"></div>
+    
+    <script type="module">
+        const output = document.getElementById('output');
+        
+        function log(message) {
+            console.log(message);
+            output.innerHTML += '<p>' + message + '</p>';
+        }
+        
+        try {
+            log('开始测试修复后的代码...');
+            
+            // 导入 UIManager
+            const { uiManager } = await import('./src/components/UIManager.js');
+            
+            log('UIManager 导入成功');
+            
+            // 模拟一个简单的 poseEstimator 对象
+            const mockPoseEstimator = {
+                getCurrentFacingMode: () => 'user',
+                test: 'mock'
+            };
+            
+            // 测试原始方法调用
+            try {
+                uiManager.setPoseEstimator(mockPoseEstimator);
+                log('✅ 原始方法调用成功');
+            } catch (error) {
+                log('❌ 原始方法调用失败: ' + error.message);
+                
+                // 测试修复后的方法调用
+                try {
+                    Object.getPrototypeOf(uiManager).setPoseEstimator.call(uiManager, mockPoseEstimator);
+                    log('✅ 修复后的方法调用成功');
+                } catch (fixError) {
+                    log('❌ 修复后的方法调用也失败: ' + fixError.message);
+                }
+            }
+            
+            // 验证设置是否成功
+            if (uiManager.poseEstimator === mockPoseEstimator) {
+                log('✅ PoseEstimator 设置验证成功');
+            } else {
+                log('❌ PoseEstimator 设置验证失败');
+            }
+            
+        } catch (error) {
+            log('ERROR: ' + error.message);
+            log('ERROR Stack: ' + error.stack);
+        }
+    </script>
+</body>
+</html>
