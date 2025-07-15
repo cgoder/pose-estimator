@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>运动分析器集成测试</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .content {
+            padding: 30px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: #f9f9f9;
+        }
+        .test-section h3 {
+            color: #4CAF50;
+            margin-top: 0;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background: #2196F3;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #1976D2;
+            transform: translateY(-2px);
+        }
+        .btn-warning {
+            background: #FF9800;
+            color: white;
+        }
+        .btn-warning:hover {
+            background: #F57C00;
+            transform: translateY(-2px);
+        }
+        .result-box {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .success {
+            background: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border-color: #bee5eb;
+            color: #0c5460;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-success { background: #4CAF50; }
+        .status-error { background: #f44336; }
+        .status-warning { background: #FF9800; }
+        .status-info { background: #2196F3; }
+        .analyzer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .analyzer-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .analyzer-card:hover {
+            border-color: #4CAF50;
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .analyzer-card.active {
+            border-color: #4CAF50;
+            background: #f0f8f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏃‍♂️ 运动分析器集成测试</h1>
+            <p>模块化重构后的功能验证 - 小步快跑敏捷测试</p>
+        </div>
+        
+        <div class="content">
+            <!-- 模块加载测试 -->
+            <div class="test-section">
+                <h3>📦 模块加载测试</h3>
+                <div class="button-group">
+                    <button class="btn-primary" onclick="testModuleLoading()">测试模块加载</button>
+                    <button class="btn-secondary" onclick="testEngineCreation()">测试引擎创建</button>
+                    <button class="btn-warning" onclick="testAnalyzerCreation()">测试分析器创建</button>
+                </div>
+                <div id="moduleTestResult" class="result-box">点击按钮开始测试...</div>
+            </div>
+
+            <!-- 分析器功能测试 -->
+            <div class="test-section">
+                <h3>🔍 分析器功能测试</h3>
+                <div class="analyzer-grid">
+                    <div class="analyzer-card" data-type="squat">
+                        <h4>深蹲分析器</h4>
+                        <button class="btn-primary" onclick="testAnalyzer('squat')">测试</button>
+                    </div>
+                    <div class="analyzer-card" data-type="pushup">
+                        <h4>俯卧撑分析器</h4>
+                        <button class="btn-primary" onclick="testAnalyzer('pushup')">测试</button>
+                    </div>
+                    <div class="analyzer-card" data-type="plank">
+                        <h4>平板支撑分析器</h4>
+                        <button class="btn-primary" onclick="testAnalyzer('plank')">测试</button>
+                    </div>
+                    <div class="analyzer-card" data-type="jumpingjack">
+                        <h4>开合跳分析器</h4>
+                        <button class="btn-primary" onclick="testAnalyzer('jumpingjack')">测试</button>
+                    </div>
+                    <div class="analyzer-card" data-type="lunge">
+                        <h4>弓步蹲分析器</h4>
+                        <button class="btn-primary" onclick="testAnalyzer('lunge')">测试</button>
+                    </div>
+                    <div class="analyzer-card" data-type="running">
+                        <h4>跑步分析器</h4>
+                        <button class="btn-primary" onclick="testAnalyzer('running')">测试</button>
+                    </div>
+                    <div class="analyzer-card" data-type="walking">
+                        <h4>步行分析器</h4>
+                        <button class="btn-primary" onclick="testAnalyzer('walking')">测试</button>
+                    </div>
+                </div>
+                <div id="analyzerTestResult" class="result-box">选择分析器进行测试...</div>
+            </div>
+
+            <!-- 引擎集成测试 -->
+            <div class="test-section">
+                <h3>⚙️ 引擎集成测试</h3>
+                <div class="button-group">
+                    <button class="btn-primary" onclick="testEngineAnalysis()">测试自动分析</button>
+                    <button class="btn-secondary" onclick="testAnalyzerSwitching()">测试分析器切换</button>
+                    <button class="btn-warning" onclick="testEngineConfig()">测试配置管理</button>
+                    <button class="btn-primary" onclick="runFullIntegrationTest()">完整集成测试</button>
+                </div>
+                <div id="engineTestResult" class="result-box">点击按钮开始引擎测试...</div>
+            </div>
+
+            <!-- 测试状态总览 -->
+            <div class="test-section">
+                <h3>📊 测试状态总览</h3>
+                <div id="testSummary" class="result-box info">
+                    <div><span class="status-indicator status-info"></span>等待开始测试...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // 模拟关键点数据
+        const mockKeypoints = [
+            { x: 100, y: 50, confidence: 0.9 },   // nose
+            { x: 90, y: 60, confidence: 0.8 },    // left_eye
+            { x: 110, y: 60, confidence: 0.8 },   // right_eye
+            { x: 85, y: 65, confidence: 0.7 },    // left_ear
+            { x: 115, y: 65, confidence: 0.7 },   // right_ear
+            { x: 70, y: 100, confidence: 0.9 },   // left_shoulder
+            { x: 130, y: 100, confidence: 0.9 },  // right_shoulder
+            { x: 60, y: 150, confidence: 0.8 },   // left_elbow
+            { x: 140, y: 150, confidence: 0.8 },  // right_elbow
+            { x: 50, y: 200, confidence: 0.7 },   // left_wrist
+            { x: 150, y: 200, confidence: 0.7 },  // right_wrist
+            { x: 80, y: 180, confidence: 0.9 },   // left_hip
+            { x: 120, y: 180, confidence: 0.9 },  // right_hip
+            { x: 75, y: 250, confidence: 0.8 },   // left_knee
+            { x: 125, y: 250, confidence: 0.8 },  // right_knee
+            { x: 70, y: 320, confidence: 0.7 },   // left_ankle
+            { x: 130, y: 320, confidence: 0.7 }   // right_ankle
+        ];
+
+        let testResults = {
+            moduleLoading: null,
+            engineCreation: null,
+            analyzerCreation: null,
+            analyzers: {},
+            engineTests: {}
+        };
+
+        // 全局变量存储模块
+        let ExerciseAnalysisEngine = null;
+        let analyzers = {};
+
+        // 更新测试总览
+        function updateTestSummary() {
+            const summary = document.getElementById('testSummary');
+            let html = '';
+            
+            // 模块加载状态
+            if (testResults.moduleLoading !== null) {
+                const status = testResults.moduleLoading ? 'success' : 'error';
+                const text = testResults.moduleLoading ? '模块加载成功' : '模块加载失败';
+                html += `<div><span class="status-indicator status-${status}"></span>${text}</div>`;
+            }
+            
+            // 引擎创建状态
+            if (testResults.engineCreation !== null) {
+                const status = testResults.engineCreation ? 'success' : 'error';
+                const text = testResults.engineCreation ? '引擎创建成功' : '引擎创建失败';
+                html += `<div><span class="status-indicator status-${status}"></span>${text}</div>`;
+            }
+            
+            // 分析器测试状态
+            const analyzerCount = Object.keys(testResults.analyzers).length;
+            if (analyzerCount > 0) {
+                const successCount = Object.values(testResults.analyzers).filter(r => r).length;
+                const status = successCount === analyzerCount ? 'success' : (successCount > 0 ? 'warning' : 'error');
+                html += `<div><span class="status-indicator status-${status}"></span>分析器测试: ${successCount}/${analyzerCount} 通过</div>`;
+            }
+            
+            // 引擎集成测试状态
+            const engineTestCount = Object.keys(testResults.engineTests).length;
+            if (engineTestCount > 0) {
+                const successCount = Object.values(testResults.engineTests).filter(r => r).length;
+                const status = successCount === engineTestCount ? 'success' : (successCount > 0 ? 'warning' : 'error');
+                html += `<div><span class="status-indicator status-${status}"></span>引擎测试: ${successCount}/${engineTestCount} 通过</div>`;
+            }
+            
+            summary.innerHTML = html || '<div><span class="status-indicator status-info"></span>等待开始测试...</div>';
+        }
+
+        // 测试模块加载
+        window.testModuleLoading = async function() {
+            const resultDiv = document.getElementById('moduleTestResult');
+            resultDiv.innerHTML = '正在测试模块加载...';
+            resultDiv.className = 'result-box info';
+            
+            const moduleResults = [];
+            
+            // 逐个测试模块加载
+            const moduleList = [
+                { name: 'BaseExerciseAnalyzer', path: './BaseExerciseAnalyzer.js' },
+                { name: 'SquatAnalyzer', path: './SquatAnalyzer.js' },
+                { name: 'PushUpAnalyzer', path: './PushUpAnalyzer.js' },
+                { name: 'PlankAnalyzer', path: './PlankAnalyzer.js' },
+                { name: 'JumpingJackAnalyzer', path: './JumpingJackAnalyzer.js' },
+                { name: 'LungeAnalyzer', path: './LungeAnalyzer.js' },
+                { name: 'RunningAnalyzer', path: './RunningAnalyzer.js' },
+                { name: 'WalkingAnalyzer', path: './WalkingAnalyzer.js' },
+                { name: 'ExerciseAnalysisEngine', path: './ExerciseAnalysisEngine.js' }
+            ];
+            
+            for (const moduleInfo of moduleList) {
+                try {
+                    const module = await import(moduleInfo.path);
+                    moduleResults.push({
+                        name: moduleInfo.name,
+                        success: true,
+                        hasDefault: !!module.default,
+                        details: module.default ? `成功 (${typeof module.default})` : '无默认导出'
+                    });
+                    
+                    if (moduleInfo.name === 'ExerciseAnalysisEngine') {
+                        ExerciseAnalysisEngine = module.default;
+                    } else {
+                        analyzers[moduleInfo.name] = module;
+                    }
+                } catch (error) {
+                    moduleResults.push({
+                        name: moduleInfo.name,
+                        success: false,
+                        hasDefault: false,
+                        details: `失败: ${error.message}`
+                    });
+                }
+            }
+            
+            // 生成结果报告
+            let result = '';
+            const successCount = moduleResults.filter(r => r.success).length;
+            const totalCount = moduleResults.length;
+            
+            if (successCount === totalCount) {
+                result += `✅ 模块加载测试通过! (${successCount}/${totalCount})\n\n`;
+                testResults.moduleLoading = true;
+                resultDiv.className = 'result-box success';
+            } else {
+                result += `❌ 模块加载部分失败! (${successCount}/${totalCount})\n\n`;
+                testResults.moduleLoading = false;
+                resultDiv.className = 'result-box error';
+            }
+            
+            moduleResults.forEach(moduleResult => {
+                const status = moduleResult.success ? '✅' : '❌';
+                result += `${status} ${moduleResult.name}: ${moduleResult.details}\n`;
+            });
+            
+            resultDiv.innerHTML = result;
+            updateTestSummary();
+        };
+
+        // 测试引擎创建
+        window.testEngineCreation = function() {
+            const resultDiv = document.getElementById('moduleTestResult');
+            
+            if (!ExerciseAnalysisEngine) {
+                resultDiv.innerHTML = '❌ 请先进行模块加载测试';
+                resultDiv.className = 'result-box error';
+                return;
+            }
+            
+            try {
+                const engine = new ExerciseAnalysisEngine();
+                
+                let result = '✅ 引擎创建测试通过!\n\n';
+                result += `引擎实例: ${engine ? '✅' : '❌'}\n`;
+                result += `可用分析器: ${engine.getAvailableAnalyzers().join(', ')}\n`;
+                result += `引擎配置: ${JSON.stringify(engine.getConfig(), null, 2)}\n`;
+                result += `引擎统计: ${JSON.stringify(engine.getStats(), null, 2)}`;
+                
+                resultDiv.innerHTML = result;
+                resultDiv.className = 'result-box success';
+                testResults.engineCreation = true;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `❌ 引擎创建失败:\n${error.message}`;
+                resultDiv.className = 'result-box error';
+                testResults.engineCreation = false;
+            }
+            
+            updateTestSummary();
+        };
+
+        // 测试分析器创建
+        window.testAnalyzerCreation = function() {
+            const resultDiv = document.getElementById('moduleTestResult');
+            
+            if (!analyzers.SquatAnalyzer) {
+                resultDiv.innerHTML = '❌ 请先进行模块加载测试';
+                resultDiv.className = 'result-box error';
+                return;
+            }
+            
+            try {
+                let result = '✅ 分析器创建测试通过!\n\n';
+                
+                for (const [name, module] of Object.entries(analyzers)) {
+                    if (name === 'BaseExerciseAnalyzer') continue;
+                    
+                    const analyzer = new module.default();
+                    result += `${name}: ${analyzer ? '✅' : '❌'} (${analyzer.name})\n`;
+                }
+                
+                resultDiv.innerHTML = result;
+                resultDiv.className = 'result-box success';
+                testResults.analyzerCreation = true;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `❌ 分析器创建失败:\n${error.message}`;
+                resultDiv.className = 'result-box error';
+                testResults.analyzerCreation = false;
+            }
+            
+            updateTestSummary();
+        };
+
+        // 测试单个分析器
+        window.testAnalyzer = function(type) {
+            const resultDiv = document.getElementById('analyzerTestResult');
+            const card = document.querySelector(`[data-type="${type}"]`);
+            
+            if (!analyzers.SquatAnalyzer) {
+                resultDiv.innerHTML = '❌ 请先进行模块加载测试';
+                resultDiv.className = 'result-box error';
+                return;
+            }
+            
+            try {
+                // 获取对应的分析器类
+                const analyzerMap = {
+                    squat: analyzers.SquatAnalyzer.default,
+                    pushup: analyzers.PushUpAnalyzer.default,
+                    plank: analyzers.PlankAnalyzer.default,
+                    jumpingjack: analyzers.JumpingJackAnalyzer.default,
+                    lunge: analyzers.LungeAnalyzer.default,
+                    running: analyzers.RunningAnalyzer.default,
+                    walking: analyzers.WalkingAnalyzer.default
+                };
+                
+                const AnalyzerClass = analyzerMap[type];
+                if (!AnalyzerClass) {
+                    throw new Error(`未找到分析器: ${type}`);
+                }
+                
+                const analyzer = new AnalyzerClass();
+                
+                // 创建模拟历史数据
+                const mockHistory = [
+                    { keypoints: mockKeypoints, timestamp: Date.now() - 100 },
+                    { keypoints: mockKeypoints, timestamp: Date.now() - 50 }
+                ];
+                
+                // 测试检测功能
+                const confidence = analyzer.detectExercise(mockKeypoints, mockHistory);
+                
+                // 测试分析功能
+                const analysisResult = analyzer.analyze(mockKeypoints, mockHistory, { timestamp: Date.now() });
+                
+                let result = `✅ ${analyzer.name} 测试通过!\n\n`;
+                result += `检测置信度: ${confidence.toFixed(3)}\n`;
+                result += `分析结果:\n${JSON.stringify(analysisResult, null, 2)}`;
+                
+                resultDiv.innerHTML = result;
+                resultDiv.className = 'result-box success';
+                card.classList.add('active');
+                testResults.analyzers[type] = true;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `❌ ${type} 分析器测试失败:\n${error.message}`;
+                resultDiv.className = 'result-box error';
+                card.classList.remove('active');
+                testResults.analyzers[type] = false;
+            }
+            
+            updateTestSummary();
+        };
+
+        // 测试引擎分析
+        window.testEngineAnalysis = function() {
+            const resultDiv = document.getElementById('engineTestResult');
+            
+            if (!ExerciseAnalysisEngine) {
+                resultDiv.innerHTML = '❌ 请先进行模块加载测试';
+                resultDiv.className = 'result-box error';
+                return;
+            }
+            
+            try {
+                const engine = new ExerciseAnalysisEngine();
+                
+                // 测试自动分析
+                const result1 = engine.analyze(mockKeypoints, { timestamp: Date.now() });
+                
+                // 等待一段时间后再次分析
+                setTimeout(() => {
+                    const result2 = engine.analyze(mockKeypoints, { timestamp: Date.now() });
+                    
+                    let output = '✅ 引擎分析测试通过!\n\n';
+                    output += `第一次分析结果:\n${JSON.stringify(result1, null, 2)}\n\n`;
+                    output += `第二次分析结果:\n${JSON.stringify(result2, null, 2)}\n\n`;
+                    output += `当前分析器: ${JSON.stringify(engine.getCurrentAnalyzerInfo(), null, 2)}`;
+                    
+                    resultDiv.innerHTML = output;
+                    resultDiv.className = 'result-box success';
+                    testResults.engineTests.analysis = true;
+                    updateTestSummary();
+                }, 100);
+                
+            } catch (error) {
+                resultDiv.innerHTML = `❌ 引擎分析测试失败:\n${error.message}`;
+                resultDiv.className = 'result-box error';
+                testResults.engineTests.analysis = false;
+                updateTestSummary();
+            }
+        };
+
+        // 测试分析器切换
+        window.testAnalyzerSwitching = function() {
+            const resultDiv = document.getElementById('engineTestResult');
+            
+            if (!ExerciseAnalysisEngine) {
+                resultDiv.innerHTML = '❌ 请先进行模块加载测试';
+                resultDiv.className = 'result-box error';
+                return;
+            }
+            
+            try {
+                const engine = new ExerciseAnalysisEngine();
+                
+                let result = '✅ 分析器切换测试通过!\n\n';
+                
+                // 测试手动设置分析器
+                const types = ['squat', 'pushup', 'plank'];
+                for (const type of types) {
+                    const success = engine.setAnalyzer(type);
+                    const info = engine.getCurrentAnalyzerInfo();
+                    result += `设置 ${type}: ${success ? '✅' : '❌'} - 当前: ${info ? info.type : 'null'}\n`;
+                }
+                
+                // 测试重置
+                engine.reset();
+                const infoAfterReset = engine.getCurrentAnalyzerInfo();
+                result += `重置后: ${infoAfterReset ? '❌ 未重置' : '✅ 已重置'}`;
+                
+                resultDiv.innerHTML = result;
+                resultDiv.className = 'result-box success';
+                testResults.engineTests.switching = true;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `❌ 分析器切换测试失败:\n${error.message}`;
+                resultDiv.className = 'result-box error';
+                testResults.engineTests.switching = false;
+            }
+            
+            updateTestSummary();
+        };
+
+        // 测试引擎配置
+        window.testEngineConfig = function() {
+            const resultDiv = document.getElementById('engineTestResult');
+            
+            if (!ExerciseAnalysisEngine) {
+                resultDiv.innerHTML = '❌ 请先进行模块加载测试';
+                resultDiv.className = 'result-box error';
+                return;
+            }
+            
+            try {
+                const engine = new ExerciseAnalysisEngine();
+                
+                // 获取默认配置
+                const defaultConfig = engine.getConfig();
+                
+                // 设置新配置
+                engine.setConfig({
+                    confidenceThreshold: 0.8,
+                    switchCooldown: 2000,
+                    maxHistoryLength: 50
+                });
+                
+                const newConfig = engine.getConfig();
+                
+                let result = '✅ 引擎配置测试通过!\n\n';
+                result += `默认配置:\n${JSON.stringify(defaultConfig, null, 2)}\n\n`;
+                result += `新配置:\n${JSON.stringify(newConfig, null, 2)}`;
+                
+                resultDiv.innerHTML = result;
+                resultDiv.className = 'result-box success';
+                testResults.engineTests.config = true;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `❌ 引擎配置测试失败:\n${error.message}`;
+                resultDiv.className = 'result-box error';
+                testResults.engineTests.config = false;
+            }
+            
+            updateTestSummary();
+        };
+
+        // 完整集成测试
+        window.runFullIntegrationTest = async function() {
+            const resultDiv = document.getElementById('engineTestResult');
+            resultDiv.innerHTML = '正在运行完整集成测试...';
+            resultDiv.className = 'result-box info';
+            
+            try {
+                // 依次运行所有测试
+                await testModuleLoading();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                testEngineCreation();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                testAnalyzerCreation();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // 测试所有分析器
+                const analyzerTypes = ['squat', 'pushup', 'plank', 'jumpingjack', 'lunge', 'running', 'walking'];
+                for (const type of analyzerTypes) {
+                    testAnalyzer(type);
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                }
+                
+                // 测试引擎功能
+                testEngineAnalysis();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                testAnalyzerSwitching();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                testEngineConfig();
+                
+                // 生成最终报告
+                setTimeout(() => {
+                    const totalTests = 1 + 1 + 1 + analyzerTypes.length + 3; // 模块+引擎+分析器创建+各分析器+引擎测试
+                    const passedTests = (testResults.moduleLoading ? 1 : 0) + 
+                                      (testResults.engineCreation ? 1 : 0) + 
+                                      (testResults.analyzerCreation ? 1 : 0) + 
+                                      Object.values(testResults.analyzers).filter(r => r).length + 
+                                      Object.values(testResults.engineTests).filter(r => r).length;
+                    
+                    let finalResult = `🎉 完整集成测试完成!\n\n`;
+                    finalResult += `总测试数: ${totalTests}\n`;
+                    finalResult += `通过测试: ${passedTests}\n`;
+                    finalResult += `成功率: ${((passedTests / totalTests) * 100).toFixed(1)}%\n\n`;
+                    
+                    if (passedTests === totalTests) {
+                        finalResult += `✅ 所有测试通过! 模块化重构成功!\n`;
+                        finalResult += `🚀 可以进入下一阶段的优化工作。`;
+                        resultDiv.className = 'result-box success';
+                    } else {
+                        finalResult += `⚠️ 部分测试失败，需要修复后再进行优化。`;
+                        resultDiv.className = 'result-box error';
+                    }
+                    
+                    resultDiv.innerHTML = finalResult;
+                }, 2000);
+                
+            } catch (error) {
+                resultDiv.innerHTML = `❌ 完整集成测试失败:\n${error.message}`;
+                resultDiv.className = 'result-box error';
+            }
+        };
+
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTestSummary();
+        });
+    </script>
+</body>
+</html>

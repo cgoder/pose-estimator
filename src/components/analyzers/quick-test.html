@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>快速模块测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-result {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #ccc;
+        }
+        .success { border-left-color: #4CAF50; }
+        .error { border-left-color: #f44336; }
+        pre {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 快速模块测试</h1>
+    <button onclick="runQuickTest()">开始测试</button>
+    <div id="results"></div>
+
+    <script type="module">
+        window.runQuickTest = async function() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="test-result">正在测试...</div>';
+            
+            const results = [];
+            
+            // 测试 1: BaseExerciseAnalyzer
+            try {
+                const BaseModule = await import('./BaseExerciseAnalyzer.js');
+                results.push({
+                    name: 'BaseExerciseAnalyzer',
+                    success: true,
+                    details: `导入成功，默认导出: ${!!BaseModule.default}`
+                });
+            } catch (error) {
+                results.push({
+                    name: 'BaseExerciseAnalyzer',
+                    success: false,
+                    details: error.message
+                });
+            }
+            
+            // 测试 2: SquatAnalyzer
+            try {
+                const SquatModule = await import('./SquatAnalyzer.js');
+                const SquatAnalyzer = SquatModule.default;
+                const analyzer = new SquatAnalyzer();
+                results.push({
+                    name: 'SquatAnalyzer',
+                    success: true,
+                    details: `导入成功，实例化成功，名称: ${analyzer.name}`
+                });
+            } catch (error) {
+                results.push({
+                    name: 'SquatAnalyzer',
+                    success: false,
+                    details: error.message
+                });
+            }
+            
+            // 测试 3: ExerciseAnalysisEngine
+            try {
+                const EngineModule = await import('./ExerciseAnalysisEngine.js');
+                const Engine = EngineModule.default;
+                const engine = new Engine();
+                results.push({
+                    name: 'ExerciseAnalysisEngine',
+                    success: true,
+                    details: `导入成功，实例化成功，可用分析器: ${engine.getAvailableAnalyzers().join(', ')}`
+                });
+            } catch (error) {
+                results.push({
+                    name: 'ExerciseAnalysisEngine',
+                    success: false,
+                    details: error.message
+                });
+            }
+            
+            // 显示结果
+            let html = '';
+            results.forEach(result => {
+                const className = result.success ? 'success' : 'error';
+                const status = result.success ? '✅' : '❌';
+                html += `
+                    <div class="test-result ${className}">
+                        <h3>${status} ${result.name}</h3>
+                        <pre>${result.details}</pre>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        };
+    </script>
+</body>
+</html>

@@ -5,6 +5,7 @@ import { adaptiveFrameController } from '../utils/adaptiveFrameController.js';
 import { hybridCacheManager } from './HybridCacheManager.js';
 import { OneEuroFilterManager } from './OneEuroFilterManager.js';
 import { offscreenRenderManager } from '../utils/offscreenRenderManager.js';
+import { ExerciseAnalysisEngine } from './ExerciseAnalysisEngine.js';
 
 /**
  * 姿态估计器主类
@@ -38,6 +39,15 @@ export class PoseEstimator {
         
         // 初始化滤波器管理器
         this.filterManager = new OneEuroFilterManager(options.filterParams);
+        
+        // 初始化运动分析引擎
+        this.exerciseEngine = new ExerciseAnalysisEngine({
+            confidenceThreshold: options.exerciseConfidenceThreshold || 0.3,
+            detectionSensitivity: options.exerciseDetectionSensitivity || 0.8,
+            countingEnabled: options.exerciseCountingEnabled !== false,
+            qualityAnalysisEnabled: options.exerciseQualityAnalysisEnabled !== false,
+            ...options.exerciseOptions
+        });
         
         // 初始化自适应帧率控制器
         adaptiveFrameController.initialize().catch(error => {
@@ -300,6 +310,8 @@ export class PoseEstimator {
             
             // 处理姿态数据
             let processedPoses = [];
+            let exerciseAnalysis = null;
+            
             if (poses && poses.length > 0) {
                 const pose = poses[0];
                 
@@ -313,10 +325,26 @@ export class PoseEstimator {
                     ...pose,
                     keypoints: filteredKeypoints
                 }];
+                
+                // 运动分析
+                try {
+                    exerciseAnalysis = this.exerciseEngine.analyze(processedPoses, performance.now());
+                } catch (exerciseError) {
+                    console.warn('⚠️ 运动分析错误:', exerciseError);
+                    exerciseAnalysis = null;
+                }
+            } else {
+                // 没有检测到姿态时，传递空数组给运动分析引擎
+                try {
+                    exerciseAnalysis = this.exerciseEngine.analyze([], performance.now());
+                } catch (exerciseError) {
+                    console.warn('⚠️ 运动分析错误:', exerciseError);
+                    exerciseAnalysis = null;
+                }
             }
             
-            // 渲染帧
-            await this._renderFrame(processedPoses);
+            // 渲染帧（包含运动分析结果）
+            await this._renderFrame(processedPoses, exerciseAnalysis);
             
             // 更新性能统计
             performanceMonitor.frameEnd(frameStartTime);
@@ -383,19 +411,21 @@ export class PoseEstimator {
     /**
      * 渲染帧（支持 OffscreenCanvas 和主线程渲染）
      * @param {Array} poses - 姿态数组
+     * @param {Object} exerciseAnalysis - 运动分析结果
      */
-    async _renderFrame(poses = []) {
+    async _renderFrame(poses = [], exerciseAnalysis = null) {
         try {
             if (this.useOffscreenRender && offscreenRenderManager.isAvailable()) {
                 // 使用 OffscreenCanvas 渲染
                 await offscreenRenderManager.renderFrame(this.video, poses, {
                     showSkeleton: this.options.showSkeleton,
                     showKeypoints: this.options.showKeypoints,
-                    showKeypointLabels: this.options.showKeypointLabels
+                    showKeypointLabels: this.options.showKeypointLabels,
+                    exerciseAnalysis: exerciseAnalysis
                 });
             } else {
                 // 使用主线程渲染（备用方案）
-                this._renderFrameMainThread(poses);
+                this._renderFrameMainThread(poses, exerciseAnalysis);
             }
         } catch (error) {
             console.error('❌ 渲染帧失败:', error);
@@ -403,7 +433,7 @@ export class PoseEstimator {
             if (this.useOffscreenRender) {
                 console.warn('⚠️ OffscreenCanvas 渲染失败，回退到主线程渲染');
                 this.useOffscreenRender = false;
-                this._renderFrameMainThread(poses);
+                this._renderFrameMainThread(poses, exerciseAnalysis);
             }
         }
     }
@@ -411,8 +441,9 @@ export class PoseEstimator {
     /**
      * 主线程渲染（备用方案）
      * @param {Array} poses - 姿态数组
+     * @param {Object} exerciseAnalysis - 运动分析结果
      */
-    _renderFrameMainThread(poses = []) {
+    _renderFrameMainThread(poses = [], exerciseAnalysis = null) {
         // 清空画布
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
@@ -430,6 +461,11 @@ export class PoseEstimator {
             if (this.options.showKeypoints && pose.keypoints) {
                 this._drawKeypoints(pose.keypoints);
             }
+        }
+        
+        // 绘制运动分析信息
+        if (exerciseAnalysis && this.options.showExerciseInfo !== false) {
+            this._drawExerciseInfo(exerciseAnalysis);
         }
     }
     
@@ -705,6 +741,219 @@ export class PoseEstimator {
     }
     
     /**
+     * 绘制运动分析信息
+     * @param {Object} exerciseAnalysis - 运动分析结果
+     */
+    _drawExerciseInfo(exerciseAnalysis) {
+        if (!exerciseAnalysis) return;
+        
+        const padding = 20;
+        const lineHeight = 25;
+        let yOffset = padding;
+        
+        // 设置文本样式
+        this.ctx.font = '16px Arial';
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.strokeStyle = 'white';
+        this.ctx.lineWidth = 3;
+        
+        // 绘制运动类型
+        if (exerciseAnalysis.exerciseType && exerciseAnalysis.exerciseType !== 'unknown') {
+            const exerciseText = `运动类型: ${this._getExerciseDisplayName(exerciseAnalysis.exerciseType)}`;
+            this.ctx.strokeText(exerciseText, padding, yOffset);
+            this.ctx.fillStyle = '#00ff00';
+            this.ctx.fillText(exerciseText, padding, yOffset);
+            yOffset += lineHeight;
+        }
+        
+        // 绘制运动状态
+        if (exerciseAnalysis.exerciseState) {
+            const stateText = `状态: ${this._getStateDisplayName(exerciseAnalysis.exerciseState)}`;
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            this.ctx.strokeText(stateText, padding, yOffset);
+            this.ctx.fillStyle = '#ffff00';
+            this.ctx.fillText(stateText, padding, yOffset);
+            yOffset += lineHeight;
+        }
+        
+        // 绘制重复次数
+        if (exerciseAnalysis.repetitionCount !== undefined) {
+            const countText = `次数: ${exerciseAnalysis.repetitionCount}`;
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            this.ctx.strokeText(countText, padding, yOffset);
+            this.ctx.fillStyle = '#ff6600';
+            this.ctx.fillText(countText, padding, yOffset);
+            yOffset += lineHeight;
+        }
+        
+        // 绘制置信度
+        if (exerciseAnalysis.confidence !== undefined) {
+            const confidenceText = `置信度: ${(exerciseAnalysis.confidence * 100).toFixed(1)}%`;
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            this.ctx.strokeText(confidenceText, padding, yOffset);
+            this.ctx.fillStyle = '#00ffff';
+            this.ctx.fillText(confidenceText, padding, yOffset);
+            yOffset += lineHeight;
+        }
+        
+        // 绘制具体分析结果
+        if (exerciseAnalysis.analysis) {
+            const analysis = exerciseAnalysis.analysis;
+            
+            // 绘制深蹲特定信息
+            if (exerciseAnalysis.exerciseType === 'squat' && analysis.kneeAngle) {
+                const angleText = `膝盖角度: ${analysis.kneeAngle.average.toFixed(1)}°`;
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                this.ctx.strokeText(angleText, padding, yOffset);
+                this.ctx.fillStyle = '#ff00ff';
+                this.ctx.fillText(angleText, padding, yOffset);
+                yOffset += lineHeight;
+                
+                // 绘制质量评估
+                if (analysis.quality && analysis.quality.score !== undefined) {
+                    const qualityText = `质量评分: ${analysis.quality.score}/100`;
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    this.ctx.strokeText(qualityText, padding, yOffset);
+                    
+                    // 根据质量评分设置颜色
+                    if (analysis.quality.score >= 80) {
+                        this.ctx.fillStyle = '#00ff00'; // 绿色 - 优秀
+                    } else if (analysis.quality.score >= 60) {
+                        this.ctx.fillStyle = '#ffff00'; // 黄色 - 良好
+                    } else {
+                        this.ctx.fillStyle = '#ff0000'; // 红色 - 需要改进
+                    }
+                    
+                    this.ctx.fillText(qualityText, padding, yOffset);
+                    yOffset += lineHeight;
+                }
+                
+                // 绘制建议
+                if (analysis.quality && analysis.quality.suggestions && analysis.quality.suggestions.length > 0) {
+                    this.ctx.font = '14px Arial';
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    this.ctx.strokeText('建议:', padding, yOffset);
+                    this.ctx.fillStyle = '#ffffff';
+                    this.ctx.fillText('建议:', padding, yOffset);
+                    yOffset += 20;
+                    
+                    analysis.quality.suggestions.slice(0, 2).forEach(suggestion => {
+                        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                        this.ctx.strokeText(`• ${suggestion}`, padding + 10, yOffset);
+                        this.ctx.fillStyle = '#ffcccc';
+                        this.ctx.fillText(`• ${suggestion}`, padding + 10, yOffset);
+                        yOffset += 18;
+                    });
+                }
+            }
+        }
+        
+        // 绘制性能信息（右上角）
+        if (exerciseAnalysis.stats) {
+            const rightX = this.canvas.width - 200;
+            let rightY = padding;
+            
+            this.ctx.font = '12px Arial';
+            
+            if (exerciseAnalysis.stats.averageAnalysisTime !== undefined) {
+                const perfText = `分析耗时: ${exerciseAnalysis.stats.averageAnalysisTime.toFixed(1)}ms`;
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                this.ctx.strokeText(perfText, rightX, rightY);
+                this.ctx.fillStyle = '#cccccc';
+                this.ctx.fillText(perfText, rightX, rightY);
+                rightY += 18;
+            }
+            
+            if (exerciseAnalysis.stats.historyLength !== undefined) {
+                const historyText = `历史帧数: ${exerciseAnalysis.stats.historyLength}`;
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                this.ctx.strokeText(historyText, rightX, rightY);
+                this.ctx.fillStyle = '#cccccc';
+                this.ctx.fillText(historyText, rightX, rightY);
+            }
+        }
+    }
+    
+    /**
+     * 获取运动类型显示名称
+     * @param {string} exerciseType - 运动类型
+     * @returns {string} 显示名称
+     */
+    _getExerciseDisplayName(exerciseType) {
+        const displayNames = {
+            'squat': '深蹲',
+            'push_up': '俯卧撑',
+            'plank': '平板支撑',
+            'jumping_jack': '开合跳',
+            'lunge': '弓步蹲',
+            'running': '跑步',
+            'walking': '走路',
+            'unknown': '未知运动'
+        };
+        return displayNames[exerciseType] || exerciseType;
+    }
+    
+    /**
+     * 获取状态显示名称
+     * @param {string} state - 状态
+     * @returns {string} 显示名称
+     */
+    _getStateDisplayName(state) {
+        const stateNames = {
+            'idle': '空闲',
+            'starting': '开始',
+            'in_progress': '进行中',
+            'completed': '完成',
+            'resting': '休息',
+            'standing': '站立',
+            'descending': '下蹲',
+            'bottom': '最低点',
+            'ascending': '起立',
+            'up': '上位',
+            'down': '下位'
+        };
+        return stateNames[state] || state;
+    }
+    
+    /**
+     * 获取运动分析状态
+     * @returns {Object} 运动分析状态信息
+     */
+    getExerciseStatus() {
+        if (!this.exerciseEngine) {
+            return { error: '运动分析引擎未初始化' };
+        }
+        
+        return this.exerciseEngine.getStatus();
+    }
+    
+    /**
+     * 重置运动分析
+     */
+    resetExerciseAnalysis() {
+        if (this.exerciseEngine) {
+            this.exerciseEngine.reset();
+            console.log('🔄 运动分析已重置');
+        }
+    }
+    
+    /**
+     * 更新运动分析选项
+     * @param {Object} options - 新的选项
+     */
+    updateExerciseOptions(options) {
+        if (this.exerciseEngine) {
+            // 重新创建运动分析引擎以应用新选项
+            const currentStatus = this.exerciseEngine.getStatus();
+            this.exerciseEngine = new ExerciseAnalysisEngine({
+                ...currentStatus.options,
+                ...options
+            });
+            console.log('🔄 运动分析选项已更新:', options);
+        }
+    }
+    
+    /**
      * 获取当前状态
      * @returns {Object} 当前状态信息
      */
@@ -721,6 +970,7 @@ export class PoseEstimator {
             performance: performanceMonitor.getReport(),
             cache: hybridCacheManager.getStats(),
             filter: this.filterManager.getStats(),
+            exercise: this.getExerciseStatus(),
             offscreenRender: {
                 enabled: this.useOffscreenRender,
                 supported: offscreenRenderManager.isSupported,

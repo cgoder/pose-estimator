@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>姿态分析系统集成测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #28a745;
+            transition: width 0.3s ease;
+        }
+        .summary {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>姿态分析系统集成测试</h1>
+        
+        <div class="test-section">
+            <h2>测试控制</h2>
+            <button onclick="runFullIntegrationTest()">运行完整集成测试</button>
+            <button onclick="testModuleLoading()">测试模块加载</button>
+            <button onclick="testEngineCreation()">测试引擎创建</button>
+            <button onclick="testAnalyzerCreation()">测试分析器创建</button>
+            <button onclick="clearResults()">清除结果</button>
+        </div>
+
+        <div class="test-section">
+            <h2>单独分析器测试</h2>
+            <button onclick="testAnalyzer('squat')">深蹲分析器</button>
+            <button onclick="testAnalyzer('pushup')">俯卧撑分析器</button>
+            <button onclick="testAnalyzer('plank')">平板支撑分析器</button>
+            <button onclick="testAnalyzer('jumpingjack')">开合跳分析器</button>
+            <button onclick="testAnalyzer('running')">跑步分析器</button>
+            <button onclick="testAnalyzer('walking')">步行分析器</button>
+            <button onclick="testAnalyzer('lunge')">弓步蹲分析器</button>
+        </div>
+        
+        <div class="test-section">
+            <h2>测试进度</h2>
+            <div class="progress">
+                <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+            </div>
+            <div id="progressText">等待开始测试...</div>
+        </div>
+        
+        <div class="test-section">
+            <h2>测试结果</h2>
+            <div id="testResults"></div>
+        </div>
+        
+        <div class="summary" id="testSummary" style="display: none;">
+            <!-- 测试摘要将在这里显示 -->
+        </div>
+    </div>
+
+    <script type="module">
+        let testResults = [];
+        let totalTests = 0;
+        let completedTests = 0;
+        
+        // 模拟姿态关键点数据
+        const mockKeypoints = [
+            { x: 100, y: 50, confidence: 0.9 },   // 0: nose
+            { x: 95, y: 45, confidence: 0.8 },    // 1: left_eye
+            { x: 105, y: 45, confidence: 0.8 },   // 2: right_eye
+            { x: 90, y: 55, confidence: 0.7 },    // 3: left_ear
+            { x: 110, y: 55, confidence: 0.7 },   // 4: right_ear
+            { x: 80, y: 100, confidence: 0.9 },   // 5: left_shoulder
+            { x: 120, y: 100, confidence: 0.9 },  // 6: right_shoulder
+            { x: 70, y: 150, confidence: 0.8 },   // 7: left_elbow
+            { x: 130, y: 150, confidence: 0.8 },  // 8: right_elbow
+            { x: 60, y: 200, confidence: 0.7 },   // 9: left_wrist
+            { x: 140, y: 200, confidence: 0.7 },  // 10: right_wrist
+            { x: 85, y: 250, confidence: 0.9 },   // 11: left_hip
+            { x: 115, y: 250, confidence: 0.9 },  // 12: right_hip
+            { x: 80, y: 350, confidence: 0.8 },   // 13: left_knee
+            { x: 120, y: 350, confidence: 0.8 },  // 14: right_knee
+            { x: 75, y: 450, confidence: 0.7 },   // 15: left_ankle
+            { x: 125, y: 450, confidence: 0.7 }   // 16: right_ankle
+        ];
+        
+        // 模拟历史数据
+        const mockHistory = [
+            { keypoints: mockKeypoints, timestamp: Date.now() - 1000 },
+            { keypoints: mockKeypoints, timestamp: Date.now() - 500 },
+            { keypoints: mockKeypoints, timestamp: Date.now() }
+        ];
+        
+        function updateProgress(completed, total) {
+            const percentage = total > 0 ? (completed / total) * 100 : 0;
+            document.getElementById('progressBar').style.width = percentage + '%';
+            document.getElementById('progressText').textContent = `进度: ${completed}/${total} (${percentage.toFixed(1)}%)`;
+        }
+        
+        function addTestResult(testName, success, message, details = null) {
+            const result = {
+                testName,
+                success,
+                message,
+                details,
+                timestamp: new Date().toLocaleTimeString()
+            };
+            
+            testResults.push(result);
+            
+            const resultsDiv = document.getElementById('testResults');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${success ? 'success' : 'error'}`;
+            
+            let content = `<strong>${success ? '✅' : '❌'} ${testName}</strong><br>${message}`;
+            if (details) {
+                content += `<br><small>${details}</small>`;
+            }
+            content += `<br><small>时间: ${result.timestamp}</small>`;
+            
+            resultDiv.innerHTML = content;
+            resultsDiv.appendChild(resultDiv);
+            
+            completedTests++;
+            updateProgress(completedTests, totalTests);
+        }
+        
+        function clearResults() {
+            testResults = [];
+            completedTests = 0;
+            totalTests = 0;
+            document.getElementById('testResults').innerHTML = '';
+            document.getElementById('testSummary').style.display = 'none';
+            updateProgress(0, 0);
+        }
+        
+        async function testModuleLoading() {
+            const modules = [
+                { name: 'ExerciseAnalysisEngine', path: './src/components/analyzers/ExerciseAnalysisEngine.js' },
+                { name: 'SquatAnalyzer', path: './src/components/analyzers/SquatAnalyzer.js' },
+                { name: 'PushUpAnalyzer', path: './src/components/analyzers/PushUpAnalyzer.js' },
+                { name: 'PlankAnalyzer', path: './src/components/analyzers/PlankAnalyzer.js' },
+                { name: 'JumpingJackAnalyzer', path: './src/components/analyzers/JumpingJackAnalyzer.js' },
+                { name: 'RunningAnalyzer', path: './src/components/analyzers/RunningAnalyzer.js' },
+                { name: 'WalkingAnalyzer', path: './src/components/analyzers/WalkingAnalyzer.js' },
+                { name: 'LungeAnalyzer', path: './src/components/analyzers/LungeAnalyzer.js' }
+            ];
+            
+            totalTests = modules.length;
+            completedTests = 0;
+            
+            for (const module of modules) {
+                try {
+                    const imported = await import(module.path);
+                    const hasDefault = imported.default !== undefined;
+                    const hasNamed = Object.keys(imported).length > (hasDefault ? 1 : 0);
+                    
+                    addTestResult(
+                        `模块加载: ${module.name}`,
+                        true,
+                        `成功加载模块`,
+                        `默认导出: ${hasDefault ? '是' : '否'}, 命名导出: ${hasNamed ? '是' : '否'}`
+                    );
+                } catch (error) {
+                    addTestResult(
+                        `模块加载: ${module.name}`,
+                        false,
+                        `加载失败: ${error.message}`,
+                        `路径: ${module.path}`
+                    );
+                }
+            }
+        }
+        
+        async function testEngineCreation() {
+            try {
+                const { default: ExerciseAnalysisEngine } = await import('./src/components/analyzers/ExerciseAnalysisEngine.js');
+                const engine = new ExerciseAnalysisEngine();
+                
+                addTestResult(
+                    '引擎创建',
+                    true,
+                    '成功创建 ExerciseAnalysisEngine 实例',
+                    `引擎类型: ${typeof engine}, 构造函数: ${engine.constructor.name}`
+                );
+                
+                window.testEngine = engine; // 保存到全局变量供其他测试使用
+                return engine;
+            } catch (error) {
+                addTestResult(
+                    '引擎创建',
+                    false,
+                    `创建失败: ${error.message}`,
+                    error.stack
+                );
+                return null;
+            }
+        }
+        
+        async function testAnalyzerCreation() {
+            const analyzerTypes = ['squat', 'pushup', 'plank', 'jumpingjack', 'running', 'walking', 'lunge'];
+            totalTests += analyzerTypes.length;
+            
+            for (const type of analyzerTypes) {
+                try {
+                    const engine = window.testEngine || await testEngineCreation();
+                    if (!engine) {
+                        addTestResult(
+                            `分析器创建: ${type}`,
+                            false,
+                            '引擎不可用',
+                            '需要先成功创建引擎'
+                        );
+                        continue;
+                    }
+                    
+                    const analyzer = engine.getAnalyzer(type);
+                    
+                    if (analyzer) {
+                        addTestResult(
+                            `分析器创建: ${type}`,
+                            true,
+                            `成功创建 ${type} 分析器`,
+                            `分析器类型: ${analyzer.constructor.name}`
+                        );
+                    } else {
+                        addTestResult(
+                            `分析器创建: ${type}`,
+                            false,
+                            `无法创建 ${type} 分析器`,
+                            'getAnalyzer 返回 null 或 undefined'
+                        );
+                    }
+                } catch (error) {
+                    addTestResult(
+                        `分析器创建: ${type}`,
+                        false,
+                        `创建失败: ${error.message}`,
+                        error.stack
+                    );
+                }
+            }
+        }
+        
+        async function testAnalyzer(type) {
+            try {
+                const engine = window.testEngine || await testEngineCreation();
+                if (!engine) {
+                    addTestResult(
+                        `${type} 分析器测试`,
+                        false,
+                        '引擎不可用',
+                        '需要先成功创建引擎'
+                    );
+                    return;
+                }
+                
+                const analyzer = engine.getAnalyzer(type);
+                if (!analyzer) {
+                    addTestResult(
+                        `${type} 分析器测试`,
+                        false,
+                        `无法获取 ${type} 分析器`,
+                        'getAnalyzer 返回 null 或 undefined'
+                    );
+                    return;
+                }
+                
+                // 测试 detectExercise 方法
+                try {
+                    const detectResult = analyzer.detectExercise(mockKeypoints, mockHistory);
+                    addTestResult(
+                        `${type} detectExercise`,
+                        true,
+                        `检测成功，置信度: ${detectResult.confidence || 'N/A'}`,
+                        `结果: ${JSON.stringify(detectResult).substring(0, 100)}...`
+                    );
+                } catch (error) {
+                    addTestResult(
+                        `${type} detectExercise`,
+                        false,
+                        `检测失败: ${error.message}`,
+                        error.stack
+                    );
+                }
+                
+                // 测试 analyze 方法
+                try {
+                    const analyzeResult = analyzer.analyze(mockKeypoints, mockHistory, { timestamp: Date.now() });
+                    addTestResult(
+                        `${type} analyze`,
+                        true,
+                        `分析成功`,
+                        `结果: ${JSON.stringify(analyzeResult).substring(0, 100)}...`
+                    );
+                } catch (error) {
+                    addTestResult(
+                        `${type} analyze`,
+                        false,
+                        `分析失败: ${error.message}`,
+                        error.stack
+                    );
+                }
+                
+            } catch (error) {
+                addTestResult(
+                    `${type} 分析器测试`,
+                    false,
+                    `测试失败: ${error.message}`,
+                    error.stack
+                );
+            }
+        }
+        
+        async function testEngineAnalysis() {
+            try {
+                const engine = window.testEngine || await testEngineCreation();
+                if (!engine) {
+                    addTestResult(
+                        '引擎分析测试',
+                        false,
+                        '引擎不可用',
+                        '需要先成功创建引擎'
+                    );
+                    return;
+                }
+                
+                // 测试自动检测
+                const detectResult = engine.detectExercise(mockKeypoints, mockHistory);
+                addTestResult(
+                    '引擎自动检测',
+                    detectResult.exerciseType !== 'unknown',
+                    `检测到运动类型: ${detectResult.exerciseType}`,
+                    `置信度: ${detectResult.confidence}, 详情: ${JSON.stringify(detectResult).substring(0, 100)}...`
+                );
+                
+                // 测试分析
+                const analyzeResult = engine.analyze(mockKeypoints, mockHistory, { timestamp: Date.now() });
+                addTestResult(
+                    '引擎分析',
+                    analyzeResult && !analyzeResult.error,
+                    analyzeResult.error ? `分析失败: ${analyzeResult.error}` : '分析成功',
+                    `结果: ${JSON.stringify(analyzeResult).substring(0, 100)}...`
+                );
+                
+                // 测试切换分析器
+                engine.setCurrentAnalyzer('squat');
+                const squatResult = engine.analyze(mockKeypoints, mockHistory, { timestamp: Date.now() });
+                addTestResult(
+                    '引擎分析器切换',
+                    squatResult && squatResult.exerciseType === 'squat',
+                    `成功切换到深蹲分析器`,
+                    `结果类型: ${squatResult ? squatResult.exerciseType : 'undefined'}`
+                );
+                
+            } catch (error) {
+                addTestResult(
+                    '引擎分析测试',
+                    false,
+                    `测试失败: ${error.message}`,
+                    error.stack
+                );
+            }
+        }
+        
+        async function testAnalyzerSwitching() {
+            try {
+                const engine = window.testEngine || await testEngineCreation();
+                if (!engine) {
+                    addTestResult(
+                        '分析器切换测试',
+                        false,
+                        '引擎不可用',
+                        '需要先成功创建引擎'
+                    );
+                    return;
+                }
+                
+                const analyzerTypes = ['squat', 'pushup', 'plank'];
+                let switchSuccess = 0;
+                
+                for (const type of analyzerTypes) {
+                    try {
+                        engine.setCurrentAnalyzer(type);
+                        const result = engine.analyze(mockKeypoints, mockHistory, { timestamp: Date.now() });
+                        if (result && result.exerciseType === type) {
+                            switchSuccess++;
+                        }
+                    } catch (error) {
+                        console.error(`切换到 ${type} 失败:`, error);
+                    }
+                }
+                
+                addTestResult(
+                    '分析器切换测试',
+                    switchSuccess === analyzerTypes.length,
+                    `成功切换 ${switchSuccess}/${analyzerTypes.length} 个分析器`,
+                    `测试的分析器: ${analyzerTypes.join(', ')}`
+                );
+                
+            } catch (error) {
+                addTestResult(
+                    '分析器切换测试',
+                    false,
+                    `测试失败: ${error.message}`,
+                    error.stack
+                );
+            }
+        }
+        
+        async function testEngineConfig() {
+            try {
+                const engine = window.testEngine || await testEngineCreation();
+                if (!engine) {
+                    addTestResult(
+                        '引擎配置测试',
+                        false,
+                        '引擎不可用',
+                        '需要先成功创建引擎'
+                    );
+                    return;
+                }
+                
+                // 测试配置更新
+                const newConfig = {
+                    confidenceThreshold: 0.8,
+                    historySize: 20
+                };
+                
+                engine.updateConfig(newConfig);
+                
+                addTestResult(
+                    '引擎配置更新',
+                    true,
+                    '配置更新成功',
+                    `新配置: ${JSON.stringify(newConfig)}`
+                );
+                
+                // 测试重置
+                engine.reset();
+                
+                addTestResult(
+                    '引擎重置',
+                    true,
+                    '引擎重置成功',
+                    '所有分析器状态已重置'
+                );
+                
+            } catch (error) {
+                addTestResult(
+                    '引擎配置测试',
+                    false,
+                    `测试失败: ${error.message}`,
+                    error.stack
+                );
+            }
+        }
+        
+        async function runFullIntegrationTest() {
+            clearResults();
+            
+            // 计算总测试数
+            totalTests = 8 + 7 + 7*2 + 3 + 3 + 2; // 模块加载 + 分析器创建 + 分析器测试 + 引擎测试 + 切换测试 + 配置测试
+            completedTests = 0;
+            
+            addTestResult('集成测试开始', true, '开始运行完整集成测试套件', `总测试数: ${totalTests}`);
+            
+            // 1. 测试模块加载
+            await testModuleLoading();
+            
+            // 2. 测试引擎创建
+            await testEngineCreation();
+            
+            // 3. 测试分析器创建
+            await testAnalyzerCreation();
+            
+            // 4. 测试引擎分析功能
+            await testEngineAnalysis();
+            
+            // 5. 测试分析器切换
+            await testAnalyzerSwitching();
+            
+            // 6. 测试引擎配置
+            await testEngineConfig();
+            
+            // 显示测试摘要
+            showTestSummary();
+        }
+        
+        function showTestSummary() {
+            const successCount = testResults.filter(r => r.success).length;
+            const failureCount = testResults.filter(r => !r.success).length;
+            const successRate = testResults.length > 0 ? (successCount / testResults.length * 100).toFixed(1) : 0;
+            
+            const summaryDiv = document.getElementById('testSummary');
+            summaryDiv.innerHTML = `
+                <h3>测试摘要</h3>
+                <p>总测试数: ${testResults.length}</p>
+                <p>成功: ${successCount}</p>
+                <p>失败: ${failureCount}</p>
+                <p>成功率: ${successRate}%</p>
+                <p>测试完成时间: ${new Date().toLocaleString()}</p>
+            `;
+            summaryDiv.style.display = 'block';
+            
+            // 按类别统计
+            const categories = {};
+            testResults.forEach(result => {
+                const category = result.testName.split(' ')[0] || result.testName.split(':')[0] || '其他';
+                if (!categories[category]) {
+                    categories[category] = { success: 0, total: 0 };
+                }
+                categories[category].total++;
+                if (result.success) {
+                    categories[category].success++;
+                }
+            });
+            
+            let categoryStats = '<h4>分类统计:</h4>';
+            Object.entries(categories).forEach(([category, stats]) => {
+                const rate = (stats.success / stats.total * 100).toFixed(1);
+                categoryStats += `<p>${category}: ${stats.success}/${stats.total} (${rate}%)</p>`;
+            });
+            
+            summaryDiv.innerHTML += categoryStats;
+        }
+        
+        // 将函数暴露到全局作用域
+        window.runFullIntegrationTest = runFullIntegrationTest;
+        window.testModuleLoading = testModuleLoading;
+        window.testEngineCreation = testEngineCreation;
+        window.testAnalyzerCreation = testAnalyzerCreation;
+        window.testAnalyzer = testAnalyzer;
+        window.clearResults = clearResults;
+        
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            updateProgress(0, 0);
+        });
+    </script>
+</body>
+</html>
