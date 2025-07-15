@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>综合分析管理器演示</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .demo-section {
+            margin-bottom: 40px;
+            padding: 25px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            background: #f8fafc;
+        }
+        
+        .demo-section h2 {
+            color: #2c3e50;
+            margin-top: 0;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+            color: white;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .btn-info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        
+        .config-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .config-group {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        
+        .config-group h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .form-group select,
+        .form-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
+        
+        .status-panel {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .status-item {
+            text-align: center;
+        }
+        
+        .status-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #3498db;
+        }
+        
+        .status-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+        
+        .results-panel {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .results-header {
+            background: #f8f9fa;
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            font-weight: bold;
+        }
+        
+        .results-content {
+            padding: 15px;
+        }
+        
+        .result-item {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #f8fafc;
+            border-left: 4px solid #3498db;
+            border-radius: 4px;
+        }
+        
+        .result-timestamp {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .result-data {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .metric-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .metric-card h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+        
+        .metric-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .metric-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .metric-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-value {
+            font-weight: bold;
+            color: #3498db;
+        }
+        
+        .log-panel {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        
+        .log-info {
+            background: rgba(52, 152, 219, 0.2);
+        }
+        
+        .log-warning {
+            background: rgba(241, 196, 15, 0.2);
+        }
+        
+        .log-error {
+            background: rgba(231, 76, 60, 0.2);
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #ecf0f1;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            transition: width 0.3s ease;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .analyzing {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏃‍♂️ 综合分析管理器演示</h1>
+            <p>TensorFlow.js 健身姿态分析系统 - 高级功能展示</p>
+        </div>
+        
+        <div class="content">
+            <!-- 配置面板 -->
+            <div class="demo-section">
+                <h2>⚙️ 分析配置</h2>
+                <div class="config-panel">
+                    <div class="config-group">
+                        <h3>分析模式</h3>
+                        <div class="form-group">
+                            <label for="analysisMode">分析模式:</label>
+                            <select id="analysisMode">
+                                <option value="basic">基础模式</option>
+                                <option value="advanced">高级模式</option>
+                                <option value="comprehensive" selected>综合模式</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="outputFormat">输出格式:</label>
+                            <select id="outputFormat">
+                                <option value="minimal">最简</option>
+                                <option value="standard">标准</option>
+                                <option value="detailed" selected>详细</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="config-group">
+                        <h3>性能设置</h3>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="enablePerformanceOptimization" checked>
+                                启用性能优化
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="enableCaching" checked>
+                                启用结果缓存
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="adaptiveQuality" checked>
+                                自适应质量
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="config-group">
+                        <h3>数据处理</h3>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="enableDataSmoothing" checked>
+                                数据平滑
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="enableOutlierDetection" checked>
+                                异常检测
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="enableTrendAnalysis" checked>
+                                趋势分析
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="config-group">
+                        <h3>警告设置</h3>
+                        <div class="form-group">
+                            <label for="lowConfidenceThreshold">低置信度阈值:</label>
+                            <input type="number" id="lowConfidenceThreshold" value="0.5" min="0" max="1" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label for="lowQualityThreshold">低质量阈值:</label>
+                            <input type="number" id="lowQualityThreshold" value="60" min="0" max="100">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="initializeManager()">🚀 初始化管理器</button>
+                    <button class="btn btn-success" onclick="startAnalysis()">▶️ 开始分析</button>
+                    <button class="btn btn-warning" onclick="stopAnalysis()">⏹️ 停止分析</button>
+                    <button class="btn btn-info" onclick="resetManager()">🔄 重置管理器</button>
+                </div>
+            </div>
+            
+            <!-- 状态面板 -->
+            <div class="demo-section">
+                <h2>📊 系统状态</h2>
+                <div class="status-panel">
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="status-value" id="analysisCount">0</div>
+                            <div class="status-label">总分析次数</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-value" id="avgProcessingTime">0ms</div>
+                            <div class="status-label">平均处理时间</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-value" id="cacheHitRate">0%</div>
+                            <div class="status-label">缓存命中率</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-value" id="systemStatus">待机</div>
+                            <div class="status-label">系统状态</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 模拟分析 -->
+            <div class="demo-section">
+                <h2>🎯 模拟分析测试</h2>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="simulateSquatAnalysis()">🏋️ 模拟深蹲分析</button>
+                    <button class="btn btn-primary" onclick="simulatePushUpAnalysis()">💪 模拟俯卧撑分析</button>
+                    <button class="btn btn-primary" onclick="simulateRunningAnalysis()">🏃 模拟跑步分析</button>
+                    <button class="btn btn-info" onclick="runBatchAnalysis()">📦 批量分析测试</button>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="analysisProgress" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <!-- 分析结果 -->
+            <div class="demo-section">
+                <h2>📋 分析结果</h2>
+                <div class="results-panel">
+                    <div class="results-header">最新分析结果</div>
+                    <div class="results-content" id="resultsContent">
+                        <p style="text-align: center; color: #666; margin: 40px 0;">暂无分析结果</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 性能指标 -->
+            <div class="demo-section">
+                <h2>⚡ 性能指标</h2>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <h3>分析引擎</h3>
+                        <ul class="metric-list" id="engineMetrics">
+                            <li><span>总分析次数</span><span class="metric-value">0</span></li>
+                            <li><span>成功率</span><span class="metric-value">0%</span></li>
+                            <li><span>平均置信度</span><span class="metric-value">0%</span></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <h3>性能监控</h3>
+                        <ul class="metric-list" id="performanceMetrics">
+                            <li><span>平均FPS</span><span class="metric-value">0</span></li>
+                            <li><span>平均延迟</span><span class="metric-value">0ms</span></li>
+                            <li><span>内存使用</span><span class="metric-value">0MB</span></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <h3>质量评估</h3>
+                        <ul class="metric-list" id="qualityMetrics">
+                            <li><span>平均质量分数</span><span class="metric-value">0</span></li>
+                            <li><span>评估次数</span><span class="metric-value">0</span></li>
+                            <li><span>改进建议数</span><span class="metric-value">0</span></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <h3>生物力学</h3>
+                        <ul class="metric-list" id="biomechanicsMetrics">
+                            <li><span>分析次数</span><span class="metric-value">0</span></li>
+                            <li><span>平均效率</span><span class="metric-value">0%</span></li>
+                            <li><span>风险评估</span><span class="metric-value">低</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 系统日志 -->
+            <div class="demo-section">
+                <h2>📝 系统日志</h2>
+                <div class="log-panel" id="systemLog">
+                    <div class="log-entry log-info">[INFO] 系统已准备就绪</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        // 模拟 AnalysisManager（实际使用时应导入真实模块）
+        class MockAnalysisManager {
+            constructor(config = {}) {
+                this.config = {
+                    mode: 'comprehensive',
+                    realTimeAnalysis: true,
+                    enableDataSmoothing: true,
+                    enableOutlierDetection: true,
+                    enableTrendAnalysis: true,
+                    outputFormat: 'detailed',
+                    enablePerformanceOptimization: true,
+                    enableCaching: true,
+                    adaptiveQuality: true,
+                    warningThresholds: {
+                        lowConfidence: 0.5,
+                        lowQuality: 60
+                    },
+                    ...config
+                };
+                
+                this.state = {
+                    isActive: false,
+                    totalAnalyses: 0,
+                    errors: [],
+                    warnings: []
+                };
+                
+                this.stats = {
+                    manager: {
+                        totalAnalyses: 0,
+                        errors: 0,
+                        warnings: 0,
+                        cacheHitRate: 0
+                    },
+                    performance: {
+                        avgFPS: 0,
+                        avgLatency: 0,
+                        memoryUsage: 0
+                    },
+                    quality: {
+                        avgScore: 0,
+                        assessmentCount: 0,
+                        recommendationCount: 0
+                    },
+                    biomechanics: {
+                        analysisCount: 0,
+                        avgEfficiency: 0,
+                        riskLevel: 'low'
+                    }
+                };
+                
+                this.eventListeners = new Map();
+            }
+            
+            start() {
+                this.state.isActive = true;
+                this._log('info', '分析管理器已启动');
+            }
+            
+            stop() {
+                this.state.isActive = false;
+                this._log('info', '分析管理器已停止');
+            }
+            
+            async analyze(keypoints, options = {}) {
+                if (!this.state.isActive) {
+                    throw new Error('分析管理器未启动');
+                }
+                
+                const startTime = performance.now();
+                
+                // 模拟分析过程
+                await new Promise(resolve => setTimeout(resolve, Math.random() * 50 + 20));
+                
+                const processingTime = performance.now() - startTime;
+                this.state.totalAnalyses++;
+                
+                // 生成模拟结果
+                const result = this._generateMockResult(keypoints, options, processingTime);
+                
+                // 更新统计信息
+                this._updateStats(result, processingTime);
+                
+                // 发送事件
+                this._emitEvent('analysis_complete', { result, processingTime });
+                
+                this._log('info', `分析完成: ${result.exerciseType}, 质量: ${result.quality}`);
+                
+                return result;
+            }
+            
+            reset() {
+                this.state.totalAnalyses = 0;
+                this.state.errors = [];
+                this.state.warnings = [];
+                this._resetStats();
+                this._log('info', '分析管理器已重置');
+            }
+            
+            getStatus() {
+                return {
+                    ...this.state,
+                    config: this.config
+                };
+            }
+            
+            getStats() {
+                return this.stats;
+            }
+            
+            addEventListener(event, callback) {
+                if (!this.eventListeners.has(event)) {
+                    this.eventListeners.set(event, []);
+                }
+                this.eventListeners.get(event).push(callback);
+            }
+            
+            _generateMockResult(keypoints, options, processingTime) {
+                const exerciseTypes = ['squat', 'pushup', 'running', 'plank', 'lunge'];
+                const exerciseType = options.exerciseType || exerciseTypes[Math.floor(Math.random() * exerciseTypes.length)];
+                
+                return {
+                    exerciseType,
+                    repetitions: Math.floor(Math.random() * 20) + 1,
+                    quality: Math.floor(Math.random() * 40) + 60,
+                    confidence: Math.random() * 0.4 + 0.6,
+                    phase: ['preparation', 'execution', 'recovery'][Math.floor(Math.random() * 3)],
+                    timestamp: Date.now(),
+                    qualityAssessment: {
+                        overallScore: Math.floor(Math.random() * 30) + 70,
+                        technicalScore: Math.floor(Math.random() * 30) + 70,
+                        safetyScore: Math.floor(Math.random() * 30) + 70,
+                        recommendations: [
+                            '保持背部挺直',
+                            '控制动作速度',
+                            '注意呼吸节奏'
+                        ]
+                    },
+                    biomechanics: {
+                        efficiency: Math.random() * 0.3 + 0.7,
+                        symmetry: Math.random() * 0.2 + 0.8,
+                        stability: Math.random() * 0.2 + 0.8,
+                        overallScore: Math.floor(Math.random() * 30) + 70
+                    },
+                    kinematics: {
+                        smoothness: Math.random() * 0.3 + 0.7,
+                        overallScore: Math.floor(Math.random() * 30) + 70
+                    },
+                    comprehensiveScore: Math.floor(Math.random() * 30) + 70,
+                    metadata: {
+                        analysisMode: this.config.mode,
+                        processingTime,
+                        timestamp: Date.now()
+                    }
+                };
+            }
+            
+            _updateStats(result, processingTime) {
+                this.stats.manager.totalAnalyses++;
+                this.stats.manager.cacheHitRate = Math.min(95, this.stats.manager.cacheHitRate + 1);
+                
+                this.stats.performance.avgFPS = Math.floor(1000 / (processingTime + Math.random() * 10));
+                this.stats.performance.avgLatency = Math.floor(processingTime);
+                this.stats.performance.memoryUsage = Math.floor(Math.random() * 50 + 100);
+                
+                this.stats.quality.avgScore = Math.floor((this.stats.quality.avgScore + result.quality) / 2);
+                this.stats.quality.assessmentCount++;
+                this.stats.quality.recommendationCount += result.qualityAssessment.recommendations.length;
+                
+                this.stats.biomechanics.analysisCount++;
+                this.stats.biomechanics.avgEfficiency = Math.floor(result.biomechanics.efficiency * 100);
+            }
+            
+            _resetStats() {
+                this.stats = {
+                    manager: { totalAnalyses: 0, errors: 0, warnings: 0, cacheHitRate: 0 },
+                    performance: { avgFPS: 0, avgLatency: 0, memoryUsage: 0 },
+                    quality: { avgScore: 0, assessmentCount: 0, recommendationCount: 0 },
+                    biomechanics: { analysisCount: 0, avgEfficiency: 0, riskLevel: 'low' }
+                };
+            }
+            
+            _emitEvent(event, data) {
+                if (this.eventListeners.has(event)) {
+                    this.eventListeners.get(event).forEach(callback => callback(data));
+                }
+            }
+            
+            _log(level, message) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+                
+                if (typeof window !== 'undefined') {
+                    window.addLogEntry(level, logEntry);
+                }
+            }
+        }
+        
+        // 全局变量
+        let analysisManager = null;
+        let analysisInterval = null;
+        let analysisCount = 0;
+        
+        // 全局函数
+        window.initializeManager = function() {
+            const config = {
+                mode: document.getElementById('analysisMode').value,
+                outputFormat: document.getElementById('outputFormat').value,
+                enablePerformanceOptimization: document.getElementById('enablePerformanceOptimization').checked,
+                enableCaching: document.getElementById('enableCaching').checked,
+                adaptiveQuality: document.getElementById('adaptiveQuality').checked,
+                enableDataSmoothing: document.getElementById('enableDataSmoothing').checked,
+                enableOutlierDetection: document.getElementById('enableOutlierDetection').checked,
+                enableTrendAnalysis: document.getElementById('enableTrendAnalysis').checked,
+                warningThresholds: {
+                    lowConfidence: parseFloat(document.getElementById('lowConfidenceThreshold').value),
+                    lowQuality: parseInt(document.getElementById('lowQualityThreshold').value)
+                }
+            };
+            
+            analysisManager = new MockAnalysisManager(config);
+            
+            // 添加事件监听器
+            analysisManager.addEventListener('analysis_complete', (data) => {
+                updateResults(data.result);
+                updateMetrics();
+            });
+            
+            updateStatus();
+            addLogEntry('info', '分析管理器已初始化');
+        };
+        
+        window.startAnalysis = function() {
+            if (!analysisManager) {
+                alert('请先初始化管理器');
+                return;
+            }
+            
+            analysisManager.start();
+            document.getElementById('systemStatus').textContent = '运行中';
+            document.getElementById('systemStatus').className = 'status-value analyzing';
+            
+            // 开始定期分析（模拟实时分析）
+            analysisInterval = setInterval(() => {
+                simulateRandomAnalysis();
+            }, 2000);
+            
+            addLogEntry('info', '开始实时分析');
+        };
+        
+        window.stopAnalysis = function() {
+            if (!analysisManager) return;
+            
+            analysisManager.stop();
+            document.getElementById('systemStatus').textContent = '已停止';
+            document.getElementById('systemStatus').className = 'status-value';
+            
+            if (analysisInterval) {
+                clearInterval(analysisInterval);
+                analysisInterval = null;
+            }
+            
+            addLogEntry('info', '停止实时分析');
+        };
+        
+        window.resetManager = function() {
+            if (!analysisManager) return;
+            
+            analysisManager.reset();
+            analysisCount = 0;
+            
+            // 重置UI
+            document.getElementById('analysisCount').textContent = '0';
+            document.getElementById('avgProcessingTime').textContent = '0ms';
+            document.getElementById('cacheHitRate').textContent = '0%';
+            document.getElementById('systemStatus').textContent = '已重置';
+            document.getElementById('resultsContent').innerHTML = '<p style="text-align: center; color: #666; margin: 40px 0;">暂无分析结果</p>';
+            
+            updateMetrics();
+            addLogEntry('info', '管理器已重置');
+        };
+        
+        window.simulateSquatAnalysis = async function() {
+            if (!analysisManager || !analysisManager.state.isActive) {
+                alert('请先启动分析管理器');
+                return;
+            }
+            
+            const mockKeypoints = generateMockKeypoints();
+            try {
+                const result = await analysisManager.analyze(mockKeypoints, { exerciseType: 'squat' });
+                addLogEntry('info', `深蹲分析完成: 质量分数 ${result.quality}`);
+            } catch (error) {
+                addLogEntry('error', `深蹲分析失败: ${error.message}`);
+            }
+        };
+        
+        window.simulatePushUpAnalysis = async function() {
+            if (!analysisManager || !analysisManager.state.isActive) {
+                alert('请先启动分析管理器');
+                return;
+            }
+            
+            const mockKeypoints = generateMockKeypoints();
+            try {
+                const result = await analysisManager.analyze(mockKeypoints, { exerciseType: 'pushup' });
+                addLogEntry('info', `俯卧撑分析完成: 质量分数 ${result.quality}`);
+            } catch (error) {
+                addLogEntry('error', `俯卧撑分析失败: ${error.message}`);
+            }
+        };
+        
+        window.simulateRunningAnalysis = async function() {
+            if (!analysisManager || !analysisManager.state.isActive) {
+                alert('请先启动分析管理器');
+                return;
+            }
+            
+            const mockKeypoints = generateMockKeypoints();
+            try {
+                const result = await analysisManager.analyze(mockKeypoints, { exerciseType: 'running' });
+                addLogEntry('info', `跑步分析完成: 质量分数 ${result.quality}`);
+            } catch (error) {
+                addLogEntry('error', `跑步分析失败: ${error.message}`);
+            }
+        };
+        
+        window.runBatchAnalysis = async function() {
+            if (!analysisManager || !analysisManager.state.isActive) {
+                alert('请先启动分析管理器');
+                return;
+            }
+            
+            const batchSize = 10;
+            const progressBar = document.getElementById('analysisProgress');
+            
+            addLogEntry('info', `开始批量分析 (${batchSize} 个样本)`);
+            
+            for (let i = 0; i < batchSize; i++) {
+                const progress = ((i + 1) / batchSize) * 100;
+                progressBar.style.width = `${progress}%`;
+                
+                const mockKeypoints = generateMockKeypoints();
+                try {
+                    await analysisManager.analyze(mockKeypoints);
+                    await new Promise(resolve => setTimeout(resolve, 100)); // 模拟处理延迟
+                } catch (error) {
+                    addLogEntry('error', `批量分析第 ${i + 1} 项失败: ${error.message}`);
+                }
+            }
+            
+            addLogEntry('info', '批量分析完成');
+            setTimeout(() => {
+                progressBar.style.width = '0%';
+            }, 2000);
+        };
+        
+        window.addLogEntry = function(level, message) {
+            const logPanel = document.getElementById('systemLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${level}`;
+            entry.textContent = message;
+            
+            logPanel.appendChild(entry);
+            logPanel.scrollTop = logPanel.scrollHeight;
+            
+            // 限制日志条目数量
+            while (logPanel.children.length > 100) {
+                logPanel.removeChild(logPanel.firstChild);
+            }
+        };
+        
+        function generateMockKeypoints() {
+            const keypoints = [];
+            for (let i = 0; i < 17; i++) {
+                keypoints.push({
+                    x: Math.random() * 640,
+                    y: Math.random() * 480,
+                    confidence: Math.random() * 0.4 + 0.6
+                });
+            }
+            return keypoints;
+        }
+        
+        function simulateRandomAnalysis() {
+            const exercises = ['squat', 'pushup', 'running', 'plank', 'lunge'];
+            const randomExercise = exercises[Math.floor(Math.random() * exercises.length)];
+            
+            const mockKeypoints = generateMockKeypoints();
+            analysisManager.analyze(mockKeypoints, { exerciseType: randomExercise })
+                .catch(error => {
+                    addLogEntry('error', `随机分析失败: ${error.message}`);
+                });
+        }
+        
+        function updateResults(result) {
+            const resultsContent = document.getElementById('resultsContent');
+            
+            const resultItem = document.createElement('div');
+            resultItem.className = 'result-item';
+            
+            const timestamp = document.createElement('div');
+            timestamp.className = 'result-timestamp';
+            timestamp.textContent = new Date(result.timestamp).toLocaleString();
+            
+            const data = document.createElement('div');
+            data.className = 'result-data';
+            data.textContent = JSON.stringify(result, null, 2);
+            
+            resultItem.appendChild(timestamp);
+            resultItem.appendChild(data);
+            
+            resultsContent.insertBefore(resultItem, resultsContent.firstChild);
+            
+            // 限制结果显示数量
+            while (resultsContent.children.length > 10) {
+                resultsContent.removeChild(resultsContent.lastChild);
+            }
+        }
+        
+        function updateStatus() {
+            if (!analysisManager) return;
+            
+            const status = analysisManager.getStatus();
+            const stats = analysisManager.getStats();
+            
+            document.getElementById('analysisCount').textContent = status.totalAnalyses;
+            document.getElementById('avgProcessingTime').textContent = `${stats.performance.avgLatency}ms`;
+            document.getElementById('cacheHitRate').textContent = `${stats.manager.cacheHitRate}%`;
+        }
+        
+        function updateMetrics() {
+            if (!analysisManager) return;
+            
+            const stats = analysisManager.getStats();
+            
+            // 更新引擎指标
+            const engineMetrics = document.getElementById('engineMetrics');
+            engineMetrics.innerHTML = `
+                <li><span>总分析次数</span><span class="metric-value">${stats.manager.totalAnalyses}</span></li>
+                <li><span>成功率</span><span class="metric-value">98%</span></li>
+                <li><span>平均置信度</span><span class="metric-value">85%</span></li>
+            `;
+            
+            // 更新性能指标
+            const performanceMetrics = document.getElementById('performanceMetrics');
+            performanceMetrics.innerHTML = `
+                <li><span>平均FPS</span><span class="metric-value">${stats.performance.avgFPS}</span></li>
+                <li><span>平均延迟</span><span class="metric-value">${stats.performance.avgLatency}ms</span></li>
+                <li><span>内存使用</span><span class="metric-value">${stats.performance.memoryUsage}MB</span></li>
+            `;
+            
+            // 更新质量指标
+            const qualityMetrics = document.getElementById('qualityMetrics');
+            qualityMetrics.innerHTML = `
+                <li><span>平均质量分数</span><span class="metric-value">${stats.quality.avgScore}</span></li>
+                <li><span>评估次数</span><span class="metric-value">${stats.quality.assessmentCount}</span></li>
+                <li><span>改进建议数</span><span class="metric-value">${stats.quality.recommendationCount}</span></li>
+            `;
+            
+            // 更新生物力学指标
+            const biomechanicsMetrics = document.getElementById('biomechanicsMetrics');
+            biomechanicsMetrics.innerHTML = `
+                <li><span>分析次数</span><span class="metric-value">${stats.biomechanics.analysisCount}</span></li>
+                <li><span>平均效率</span><span class="metric-value">${stats.biomechanics.avgEfficiency}%</span></li>
+                <li><span>风险评估</span><span class="metric-value">${stats.biomechanics.riskLevel}</span></li>
+            `;
+        }
+        
+        // 定期更新状态
+        setInterval(() => {
+            updateStatus();
+        }, 1000);
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            addLogEntry('info', '演示页面已加载');
+        });
+    </script>
+</body>
+</html>

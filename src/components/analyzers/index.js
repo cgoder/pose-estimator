@@ -3,40 +3,38 @@
  * 提供统一的导入接口
  */
 
-// 导入主引擎
-import ExerciseAnalysisEngine, { EXERCISE_TYPES } from './ExerciseAnalysisEngine.js';
+// 导出主要分析管理器（推荐使用）
+export { default as AnalysisManager } from './AnalysisManager.js';
 
-// 导入基础分析器
-import BaseExerciseAnalyzer from './BaseExerciseAnalyzer.js';
+// 导出核心分析引擎
+export { default as ExerciseAnalysisEngine } from './ExerciseAnalysisEngine.js';
 
-// 导入具体分析器
-import SquatAnalyzer from './SquatAnalyzer.js';
-import PushUpAnalyzer from './PushUpAnalyzer.js';
-import PlankAnalyzer from './PlankAnalyzer.js';
-import JumpingJackAnalyzer from './JumpingJackAnalyzer.js';
-import LungeAnalyzer from './LungeAnalyzer.js';
-import RunningAnalyzer from './RunningAnalyzer.js';
-import WalkingAnalyzer from './WalkingAnalyzer.js';
-
-// 默认导出主引擎
-export default ExerciseAnalysisEngine;
-
-// 导出运动类型常量
-export { EXERCISE_TYPES };
+// 导出高级分析模块
+export { default as AdvancedQualityAssessment } from './AdvancedQualityAssessment.js';
+export { default as BiomechanicsAnalyzer } from './BiomechanicsAnalyzer.js';
+export { default as KinematicsAnalyzer } from './KinematicsAnalyzer.js';
+export { default as PerformanceMonitor } from './PerformanceMonitor.js';
 
 // 导出基础分析器
-export { BaseExerciseAnalyzer };
+export { default as BaseExerciseAnalyzer } from './BaseExerciseAnalyzer.js';
 
-// 导出所有具体分析器
-export {
-    SquatAnalyzer,
-    PushUpAnalyzer,
-    PlankAnalyzer,
-    JumpingJackAnalyzer,
-    LungeAnalyzer,
-    RunningAnalyzer,
-    WalkingAnalyzer
-};
+// 导出具体运动分析器
+export { default as SquatAnalyzer } from './SquatAnalyzer.js';
+export { default as PushUpAnalyzer } from './PushUpAnalyzer.js';
+export { default as LungeAnalyzer } from './LungeAnalyzer.js';
+export { default as JumpingJackAnalyzer } from './JumpingJackAnalyzer.js';
+export { default as PlankAnalyzer } from './PlankAnalyzer.js';
+export { default as BurpeeAnalyzer } from './BurpeeAnalyzer.js';
+export { default as RunningAnalyzer } from './RunningAnalyzer.js';
+export { default as DeadliftAnalyzer } from './DeadliftAnalyzer.js';
+export { default as BicepCurlAnalyzer } from './BicepCurlAnalyzer.js';
+export { default as ShoulderPressAnalyzer } from './ShoulderPressAnalyzer.js';
+
+// 导出运动类型常量
+export { EXERCISE_TYPES } from './ExerciseAnalysisEngine.js';
+
+// 默认导出分析管理器
+export default AnalysisManager;
 
 // 导出分析器映射表（便于动态创建）
 export const ANALYZER_MAP = {
