@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>姿态估计器示例</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .video-container {
+            position: relative;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        #videoElement {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .control-group {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .control-group h3 {
+            margin: 0 0 15px 0;
+            color: #495057;
+            font-size: 1.1em;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin: 5px;
+            min-width: 120px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn.success {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+        }
+        
+        .btn.danger {
+            background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+        }
+        
+        .btn.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #667eea;
+        }
+        
+        .select-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .select-group select {
+            padding: 10px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #c3e6cb;
+        }
+        
+        @media (max-width: 768px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤸‍♀️ 姿态估计器</h1>
+            <p>实时姿态检测、分析和可视化</p>
+        </div>
+        
+        <div class="content">
+            <div id="loading" class="loading">
+                正在初始化姿态估计器...
+            </div>
+            
+            <div id="error" class="error" style="display: none;"></div>
+            <div id="success" class="success" style="display: none;"></div>
+            
+            <div id="main-content" style="display: none;">
+                <div class="video-container">
+                    <video id="videoElement" autoplay muted playsinline></video>
+                    <canvas id="canvas"></canvas>
+                </div>
+                
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="fpsValue">0</div>
+                        <div class="stat-label">FPS</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="frameCount">0</div>
+                        <div class="stat-label">帧数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="poseCount">0</div>
+                        <div class="stat-label">检测到的姿态</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="confidence">0%</div>
+                        <div class="stat-label">平均置信度</div>
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <h3>🎮 控制</h3>
+                        <button id="startBtn" class="btn success">开始检测</button>
+                        <button id="stopBtn" class="btn danger" disabled>停止检测</button>
+                        <button id="pauseBtn" class="btn warning" disabled>暂停</button>
+                        <button id="resetBtn" class="btn">重置</button>
+                    </div>
+                    
+                    <div class="control-group">
+                        <h3>🎨 显示选项</h3>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="showKeypoints" checked>
+                                <label for="showKeypoints">显示关键点</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="showSkeleton" checked>
+                                <label for="showSkeleton">显示骨架</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="showTrajectories">
+                                <label for="showTrajectories">显示轨迹</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <h3>⚙️ 模型设置</h3>
+                        <div class="select-group">
+                            <label>模型类型:</label>
+                            <select id="modelType">
+                                <option value="movenet">MoveNet</option>
+                                <option value="posenet">PoseNet</option>
+                            </select>
+                            
+                            <label>模型大小:</label>
+                            <select id="modelSize">
+                                <option value="lightning">Lightning (快速)</option>
+                                <option value="thunder">Thunder (精确)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <h3>🔧 滤波设置</h3>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="enableFiltering" checked>
+                                <label for="enableFiltering">启用滤波</label>
+                            </div>
+                        </div>
+                        <div class="select-group">
+                            <label>滤波器类型:</label>
+                            <select id="filterType">
+                                <option value="oneEuro">One Euro Filter</option>
+                                <option value="kalman">Kalman Filter</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <h3>📊 分析功能</h3>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="enableBiomechanics">
+                                <label for="enableBiomechanics">生物力学分析</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="enableTrajectoryAnalysis">
+                                <label for="enableTrajectoryAnalysis">轨迹分析</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <h3>💾 数据管理</h3>
+                        <button id="exportBtn" class="btn">导出数据</button>
+                        <button id="clearDataBtn" class="btn warning">清空数据</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { PoseEstimator, utils } from './index.js';
+        
+        let poseEstimator = null;
+        let isRunning = false;
+        let stats = {
+            frameCount: 0,
+            poseCount: 0,
+            totalConfidence: 0,
+            lastFpsUpdate: Date.now(),
+            fpsFrames: 0
+        };
+        
+        // DOM 元素
+        const elements = {
+            loading: document.getElementById('loading'),
+            error: document.getElementById('error'),
+            success: document.getElementById('success'),
+            mainContent: document.getElementById('main-content'),
+            video: document.getElementById('videoElement'),
+            canvas: document.getElementById('canvas'),
+            
+            // 控制按钮
+            startBtn: document.getElementById('startBtn'),
+            stopBtn: document.getElementById('stopBtn'),
+            pauseBtn: document.getElementById('pauseBtn'),
+            resetBtn: document.getElementById('resetBtn'),
+            exportBtn: document.getElementById('exportBtn'),
+            clearDataBtn: document.getElementById('clearDataBtn'),
+            
+            // 显示选项
+            showKeypoints: document.getElementById('showKeypoints'),
+            showSkeleton: document.getElementById('showSkeleton'),
+            showTrajectories: document.getElementById('showTrajectories'),
+            
+            // 模型设置
+            modelType: document.getElementById('modelType'),
+            modelSize: document.getElementById('modelSize'),
+            
+            // 滤波设置
+            enableFiltering: document.getElementById('enableFiltering'),
+            filterType: document.getElementById('filterType'),
+            
+            // 分析功能
+            enableBiomechanics: document.getElementById('enableBiomechanics'),
+            enableTrajectoryAnalysis: document.getElementById('enableTrajectoryAnalysis'),
+            
+            // 统计显示
+            fpsValue: document.getElementById('fpsValue'),
+            frameCount: document.getElementById('frameCount'),
+            poseCount: document.getElementById('poseCount'),
+            confidence: document.getElementById('confidence')
+        };
+        
+        // 显示错误信息
+        function showError(message) {
+            elements.error.textContent = message;
+            elements.error.style.display = 'block';
+            elements.success.style.display = 'none';
+        }
+        
+        // 显示成功信息
+        function showSuccess(message) {
+            elements.success.textContent = message;
+            elements.success.style.display = 'block';
+            elements.error.style.display = 'none';
+        }
+        
+        // 隐藏消息
+        function hideMessages() {
+            elements.error.style.display = 'none';
+            elements.success.style.display = 'none';
+        }
+        
+        // 更新统计信息
+        function updateStats() {
+            const now = Date.now();
+            stats.fpsFrames++;
+            
+            if (now - stats.lastFpsUpdate >= 1000) {
+                const fps = Math.round(stats.fpsFrames * 1000 / (now - stats.lastFpsUpdate));
+                elements.fpsValue.textContent = fps;
+                stats.fpsFrames = 0;
+                stats.lastFpsUpdate = now;
+            }
+            
+            elements.frameCount.textContent = stats.frameCount;
+            elements.poseCount.textContent = stats.poseCount;
+            
+            const avgConfidence = stats.poseCount > 0 ? 
+                Math.round(stats.totalConfidence / stats.poseCount * 100) : 0;
+            elements.confidence.textContent = avgConfidence + '%';
+        }
+        
+        // 更新按钮状态
+        function updateButtonStates() {
+            elements.startBtn.disabled = isRunning;
+            elements.stopBtn.disabled = !isRunning;
+            elements.pauseBtn.disabled = !isRunning;
+        }
+        
+        // 获取当前配置
+        function getCurrentConfig() {
+            return {
+                canvas: elements.canvas,
+                modelType: elements.modelType.value,
+                modelSize: elements.modelSize.value,
+                showKeypoints: elements.showKeypoints.checked,
+                showSkeleton: elements.showSkeleton.checked,
+                showTrajectories: elements.showTrajectories.checked,
+                enableFiltering: elements.enableFiltering.checked,
+                filterType: elements.filterType.value,
+                enableBiomechanics: elements.enableBiomechanics.checked,
+                enableTrajectoryAnalysis: elements.enableTrajectoryAnalysis.checked,
+                enableUI: true,
+                enablePerformanceMonitoring: true,
+                enableDataCollection: true,
+                enableDataExport: true,
+                debug: true
+            };
+        }
+        
+        // 初始化姿态估计器
+        async function initializePoseEstimator() {
+            try {
+                // 检查浏览器兼容性
+                const compatibility = utils.checkCompatibility();
+                console.log('浏览器兼容性:', compatibility);
+                
+                if (!compatibility.webgl) {
+                    throw new Error('您的浏览器不支持WebGL，无法运行姿态估计');
+                }
+                
+                if (!compatibility.mediaDevices) {
+                    throw new Error('您的浏览器不支持摄像头访问');
+                }
+                
+                // 创建姿态估计器
+                const config = getCurrentConfig();
+                poseEstimator = new PoseEstimator(config);
+                
+                // 设置事件监听
+                poseEstimator.eventBus.on('poseDetected', (data) => {
+                    stats.frameCount++;
+                    if (data.poses && data.poses.length > 0) {
+                        stats.poseCount++;
+                        const avgConfidence = data.poses[0].keypoints.reduce((sum, kp) => sum + kp.score, 0) / data.poses[0].keypoints.length;
+                        stats.totalConfidence += avgConfidence;
+                    }
+                    updateStats();
+                });
+                
+                poseEstimator.eventBus.on('error', (error) => {
+                    showError(`检测错误: ${error.message}`);
+                });
+                
+                poseEstimator.eventBus.on('started', () => {
+                    showSuccess('姿态检测已启动');
+                    isRunning = true;
+                    updateButtonStates();
+                });
+                
+                poseEstimator.eventBus.on('stopped', () => {
+                    showSuccess('姿态检测已停止');
+                    isRunning = false;
+                    updateButtonStates();
+                });
+                
+                // 隐藏加载界面，显示主内容
+                elements.loading.style.display = 'none';
+                elements.mainContent.style.display = 'block';
+                showSuccess('姿态估计器初始化成功！');
+                
+            } catch (error) {
+                console.error('初始化失败:', error);
+                elements.loading.style.display = 'none';
+                showError(`初始化失败: ${error.message}`);
+            }
+        }
+        
+        // 事件监听器
+        elements.startBtn.addEventListener('click', async () => {
+            try {
+                hideMessages();
+                await poseEstimator.start(elements.video);
+            } catch (error) {
+                showError(`启动失败: ${error.message}`);
+            }
+        });
+        
+        elements.stopBtn.addEventListener('click', async () => {
+            try {
+                await poseEstimator.stop();
+            } catch (error) {
+                showError(`停止失败: ${error.message}`);
+            }
+        });
+        
+        elements.pauseBtn.addEventListener('click', () => {
+            if (poseEstimator.state.paused) {
+                poseEstimator.resume();
+                elements.pauseBtn.textContent = '暂停';
+            } else {
+                poseEstimator.pause();
+                elements.pauseBtn.textContent = '恢复';
+            }
+        });
+        
+        elements.resetBtn.addEventListener('click', async () => {
+            try {
+                await poseEstimator.reset();
+                stats = {
+                    frameCount: 0,
+                    poseCount: 0,
+                    totalConfidence: 0,
+                    lastFpsUpdate: Date.now(),
+                    fpsFrames: 0
+                };
+                updateStats();
+                showSuccess('系统已重置');
+            } catch (error) {
+                showError(`重置失败: ${error.message}`);
+            }
+        });
+        
+        elements.exportBtn.addEventListener('click', async () => {
+            try {
+                const result = await poseEstimator.exportData({
+                    format: 'json',
+                    includeMetadata: true
+                });
+                utils.downloadFile(result.data, `pose-data-${Date.now()}.json`, 'application/json');
+                showSuccess('数据导出成功');
+            } catch (error) {
+                showError(`导出失败: ${error.message}`);
+            }
+        });
+        
+        elements.clearDataBtn.addEventListener('click', () => {
+            if (confirm('确定要清空所有数据吗？此操作不可撤销。')) {
+                if (poseEstimator.dataCollector) {
+                    poseEstimator.dataCollector.clearData();
+                    showSuccess('数据已清空');
+                }
+            }
+        });
+        
+        // 配置变更监听
+        function setupConfigListeners() {
+            const configElements = [
+                'showKeypoints', 'showSkeleton', 'showTrajectories',
+                'enableFiltering', 'filterType',
+                'enableBiomechanics', 'enableTrajectoryAnalysis'
+            ];
+            
+            configElements.forEach(id => {
+                const element = elements[id];
+                if (element) {
+                    element.addEventListener('change', () => {
+                        if (poseEstimator) {
+                            const config = getCurrentConfig();
+                            poseEstimator.updateConfig(config);
+                        }
+                    });
+                }
+            });
+        }
+        
+        // 初始化
+        async function init() {
+            setupConfigListeners();
+            updateButtonStates();
+            await initializePoseEstimator();
+        }
+        
+        // 页面加载完成后初始化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+        
+        // 页面卸载时清理资源
+        window.addEventListener('beforeunload', () => {
+            if (poseEstimator) {
+                poseEstimator.destroy();
+            }
+        });
+    </script>
+</body>
+</html>

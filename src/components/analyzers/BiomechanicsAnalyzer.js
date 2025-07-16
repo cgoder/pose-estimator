@@ -80,6 +80,9 @@ class BiomechanicsAnalyzer {
         // 计算关节角度
         const jointAngles = this._calculateJointAngles(keypoints);
         
+        // 更新历史数据
+        this._updateHistory(jointAngles, keypoints);
+        
         // 计算关节力矩
         const jointMoments = this._calculateJointMoments(keypoints, jointAngles, deltaTime);
         
@@ -640,6 +643,234 @@ class BiomechanicsAnalyzer {
         return data;
     }
 
+    // 缺失的辅助方法实现
+    _getAngularVelocities(jointAngles, deltaTime) {
+        const velocities = {};
+        Object.keys(jointAngles).forEach(joint => {
+            velocities[joint] = this._getAngularVelocity(joint, deltaTime);
+        });
+        return velocities;
+    }
+
+    _getAngularVelocity(joint, deltaTime = 0.033) {
+        if (!this.previousAngles || !this.previousAngles[joint]) {
+            return 0;
+        }
+        const currentAngle = this.currentAngles ? this.currentAngles[joint] : 0;
+        const previousAngle = this.previousAngles[joint];
+        return (currentAngle - previousAngle) / deltaTime;
+    }
+
+    _getAngularAcceleration(joint, deltaTime) {
+        if (!this.previousVelocities || !this.previousVelocities[joint]) {
+            return 0;
+        }
+        const currentVel = this._getAngularVelocity(joint, deltaTime);
+        const previousVel = this.previousVelocities[joint];
+        return (currentVel - previousVel) / deltaTime;
+    }
+
+    _calculateSegmentCenter(keypoints, pointIndices) {
+        const validPoints = pointIndices
+            .map(i => keypoints[i])
+            .filter(point => point && typeof point.x === 'number' && typeof point.y === 'number');
+        
+        if (validPoints.length === 0) return null;
+        
+        const sumX = validPoints.reduce((sum, point) => sum + point.x, 0);
+        const sumY = validPoints.reduce((sum, point) => sum + point.y, 0);
+        
+        return {
+            x: sumX / validPoints.length,
+            y: sumY / validPoints.length
+        };
+    }
+
+    _isWithinBaseOfSupport(centerOfMass, baseOfSupport) {
+        if (!centerOfMass || !baseOfSupport) return false;
+        
+        return centerOfMass.x >= baseOfSupport.left &&
+               centerOfMass.x <= baseOfSupport.right &&
+               centerOfMass.y >= baseOfSupport.front &&
+               centerOfMass.y <= baseOfSupport.back;
+    }
+
+    _analyzePostureStability(keypoints) {
+        // 计算关键点的变化率
+        const stabilityPoints = [0, 1, 5, 6, 11, 12]; // 头、颈、肩、髋
+        let totalVariation = 0;
+        let validPoints = 0;
+        
+        stabilityPoints.forEach(pointIndex => {
+            const point = keypoints[pointIndex];
+            if (point && this.previousKeypoints && this.previousKeypoints[pointIndex]) {
+                const dx = point.x - this.previousKeypoints[pointIndex].x;
+                const dy = point.y - this.previousKeypoints[pointIndex].y;
+                const variation = Math.sqrt(dx * dx + dy * dy);
+                totalVariation += variation;
+                validPoints++;
+            }
+        });
+        
+        const averageVariation = validPoints > 0 ? totalVariation / validPoints : 0;
+        const stabilityScore = Math.max(0, 100 - averageVariation);
+        
+        return {
+            score: stabilityScore,
+            averageVariation,
+            isStable: stabilityScore > 70
+        };
+    }
+
+    _calculateStabilityScore(stability) {
+        let score = 0;
+        let factors = 0;
+        
+        if (stability.isStable !== undefined) {
+            score += stability.isStable ? 50 : 0;
+            factors++;
+        }
+        
+        if (stability.posture && stability.posture.score !== undefined) {
+            score += stability.posture.score * 0.5;
+            factors++;
+        }
+        
+        return factors > 0 ? score / factors : 0;
+    }
+
+    _checkJointAngleRisk(joint, angle, exerciseType) {
+        const jointName = joint.replace(/^(left|right)/, '').toLowerCase();
+        const ranges = this.jointRanges[jointName];
+        
+        if (!ranges) {
+            return { level: 0, message: '', joint };
+        }
+        
+        // 检查是否超出正常范围
+        let riskLevel = 0;
+        let message = '';
+        
+        Object.keys(ranges).forEach(movement => {
+            const [min, max] = ranges[movement];
+            if (angle < min - 10 || angle > max + 10) {
+                riskLevel = Math.max(riskLevel, 3); // 高风险
+                message = `${joint} ${movement} 角度超出安全范围`;
+            } else if (angle < min || angle > max) {
+                riskLevel = Math.max(riskLevel, 2); // 中等风险
+                message = `${joint} ${movement} 角度接近极限`;
+            }
+        });
+        
+        return { level: riskLevel, message, joint };
+    }
+
+    _checkVelocityRisk(keypoints) {
+        // 检查运动速度是否过快
+        let maxVelocity = 0;
+        const importantPoints = [5, 6, 7, 8, 11, 12, 13, 14];
+        
+        importantPoints.forEach(pointIndex => {
+            const velocity = this.kinematicsAnalyzer.getVelocity(pointIndex);
+            if (velocity && velocity.magnitude) {
+                maxVelocity = Math.max(maxVelocity, velocity.magnitude);
+            }
+        });
+        
+        let riskLevel = 0;
+        let message = '';
+        
+        if (maxVelocity > 1000) { // 像素/秒
+            riskLevel = 3;
+            message = '运动速度过快，可能导致受伤';
+        } else if (maxVelocity > 500) {
+            riskLevel = 2;
+            message = '运动速度较快，注意控制';
+        }
+        
+        return { level: riskLevel, message, type: 'velocity' };
+    }
+
+    _checkLoadDistributionRisk(keypoints) {
+        // 检查负荷分布是否均匀
+        const leftPoints = [5, 7, 9, 11, 13, 15];
+        const rightPoints = [6, 8, 10, 12, 14, 16];
+        
+        let leftLoad = 0;
+        let rightLoad = 0;
+        
+        leftPoints.forEach(pointIndex => {
+            const velocity = this.kinematicsAnalyzer.getVelocity(pointIndex);
+            if (velocity && velocity.magnitude) {
+                leftLoad += velocity.magnitude;
+            }
+        });
+        
+        rightPoints.forEach(pointIndex => {
+            const velocity = this.kinematicsAnalyzer.getVelocity(pointIndex);
+            if (velocity && velocity.magnitude) {
+                rightLoad += velocity.magnitude;
+            }
+        });
+        
+        const totalLoad = leftLoad + rightLoad;
+        const imbalance = totalLoad > 0 ? Math.abs(leftLoad - rightLoad) / totalLoad : 0;
+        
+        let riskLevel = 0;
+        let message = '';
+        
+        if (imbalance > 0.3) {
+            riskLevel = 2;
+            message = '左右负荷分布不均，注意平衡';
+        } else if (imbalance > 0.2) {
+            riskLevel = 1;
+            message = '轻微负荷不平衡';
+        }
+        
+        return { level: riskLevel, message, type: 'load_distribution', imbalance };
+    }
+
+    _getRiskLevel(overallRisk) {
+        if (overallRisk >= 3) return 'high';
+        if (overallRisk >= 2) return 'medium';
+        if (overallRisk >= 1) return 'low';
+        return 'none';
+    }
+
+    _generateRiskRecommendations(risks) {
+        const recommendations = [];
+        
+        risks.forEach(risk => {
+            switch (risk.type) {
+                case 'velocity':
+                    recommendations.push('减慢运动速度，注意动作控制');
+                    break;
+                case 'load_distribution':
+                    recommendations.push('注意左右平衡，均匀分配负荷');
+                    break;
+                default:
+                    if (risk.joint) {
+                        recommendations.push(`注意${risk.joint}的动作幅度和姿态`);
+                    }
+            }
+        });
+        
+        return recommendations;
+    }
+
+    /**
+     * 更新历史数据（在analyze方法中调用）
+     */
+    _updateHistory(jointAngles, keypoints) {
+        this.previousAngles = this.currentAngles;
+        this.currentAngles = jointAngles;
+        
+        this.previousVelocities = this.currentVelocities;
+        this.currentVelocities = this._getAngularVelocities(jointAngles, 0.033);
+        
+        this.previousKeypoints = keypoints;
+    }
+
     /**
      * 重置分析器
      */
@@ -648,6 +879,13 @@ class BiomechanicsAnalyzer {
         this.forceHistory.clear();
         this.powerHistory.clear();
         this.efficiencyHistory.clear();
+        
+        // 重置历史数据
+        this.previousAngles = null;
+        this.currentAngles = null;
+        this.previousVelocities = null;
+        this.currentVelocities = null;
+        this.previousKeypoints = null;
     }
 
     /**

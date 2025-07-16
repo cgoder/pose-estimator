@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="高级姿态估计应用 - 基于TensorFlow.js和MediaPipe的实时人体姿态检测与生物力学分析">
+    <meta name="keywords" content="姿态估计,人体检测,生物力学,TensorFlow.js,MediaPipe,实时分析">
+    <meta name="author" content="Pose Estimator Team">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Pose Estimator - 高级姿态估计应用">
+    <meta property="og:description" content="基于AI的实时人体姿态检测与生物力学分析应用">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://yourusername.github.io/pose-estimator">
+    <meta property="og:image" content="./assets/images/og-image.png">
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Pose Estimator - 高级姿态估计应用">
+    <meta name="twitter:description" content="基于AI的实时人体姿态检测与生物力学分析应用">
+    <meta name="twitter:image" content="./assets/images/twitter-card.png">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="./favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16x16.png">
+    <link rel="manifest" href="./manifest.json">
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#2563eb">
+    <meta name="msapplication-TileColor" content="#2563eb">
+    
+    <!-- Preconnect to external domains -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://storage.googleapis.com">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="./src/styles/main.css">
+    
+    <!-- Title -->
+    <title>Pose Estimator - 高级姿态估计应用</title>
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Pose Estimator",
+        "description": "基于AI的实时人体姿态检测与生物力学分析应用",
+        "url": "https://yourusername.github.io/pose-estimator",
+        "applicationCategory": "HealthApplication",
+        "operatingSystem": "Web Browser",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "author": {
+            "@type": "Organization",
+            "name": "Pose Estimator Team"
+        }
+    }
+    </script>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-container">
+            <div class="loading-logo">
+                <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="4" fill="none"/>
+                    <path d="M32 8 L32 16 M32 48 L32 56 M8 32 L16 32 M48 32 L56 32" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                    <circle cx="32" cy="20" r="4" fill="currentColor"/>
+                    <circle cx="20" cy="32" r="3" fill="currentColor"/>
+                    <circle cx="44" cy="32" r="3" fill="currentColor"/>
+                    <circle cx="32" cy="44" r="4" fill="currentColor"/>
+                </svg>
+            </div>
+            <h1 class="loading-title">Pose Estimator</h1>
+            <div class="loading-progress">
+                <div class="loading-bar">
+                    <div class="loading-fill" id="loading-fill"></div>
+                </div>
+                <div class="loading-text" id="loading-text">正在初始化...</div>
+            </div>
+            <div class="loading-tips">
+                <p>💡 提示：请确保摄像头已连接并授权访问</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Application -->
+    <div id="app" class="app" style="display: none;">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <div class="app-logo">
+                        <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="4" fill="none"/>
+                            <path d="M32 8 L32 16 M32 48 L32 56 M8 32 L16 32 M48 32 L56 32" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                            <circle cx="32" cy="20" r="4" fill="currentColor"/>
+                            <circle cx="20" cy="32" r="3" fill="currentColor"/>
+                            <circle cx="44" cy="32" r="3" fill="currentColor"/>
+                            <circle cx="32" cy="44" r="4" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <h1 class="app-title">Pose Estimator</h1>
+                    <div class="app-status" id="app-status">
+                        <span class="status-indicator" id="status-indicator"></span>
+                        <span class="status-text" id="status-text">准备就绪</span>
+                    </div>
+                </div>
+                
+                <div class="header-right">
+                    <div class="performance-info" id="performance-info">
+                        <div class="perf-item">
+                            <span class="perf-label">FPS:</span>
+                            <span class="perf-value" id="fps-value">0</span>
+                        </div>
+                        <div class="perf-item">
+                            <span class="perf-label">延迟:</span>
+                            <span class="perf-value" id="latency-value">0ms</span>
+                        </div>
+                        <div class="perf-item">
+                            <span class="perf-label">内存:</span>
+                            <span class="perf-value" id="memory-value">0MB</span>
+                        </div>
+                    </div>
+                    
+                    <div class="header-controls">
+                        <button class="btn btn-icon" id="settings-btn" title="设置">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                        </button>
+                        
+                        <button class="btn btn-icon" id="fullscreen-btn" title="全屏">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                            </svg>
+                        </button>
+                        
+                        <button class="btn btn-icon" id="help-btn" title="帮助">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Main Content -->
+        <main class="app-main">
+            <!-- Video Container -->
+            <div class="video-container">
+                <video id="video" class="video-element" autoplay muted playsinline></video>
+                <canvas id="canvas" class="canvas-overlay"></canvas>
+                
+                <!-- Video Controls -->
+                <div class="video-controls">
+                    <button class="btn btn-primary" id="start-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5,3 19,12 5,21"></polygon>
+                        </svg>
+                        开始检测
+                    </button>
+                    
+                    <button class="btn btn-secondary" id="stop-btn" style="display: none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="6" y="4" width="4" height="16"></rect>
+                            <rect x="14" y="4" width="4" height="16"></rect>
+                        </svg>
+                        停止检测
+                    </button>
+                    
+                    <button class="btn btn-outline" id="screenshot-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                            <circle cx="12" cy="13" r="4"></circle>
+                        </svg>
+                        截图
+                    </button>
+                    
+                    <button class="btn btn-outline" id="record-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <circle cx="12" cy="12" r="3" fill="currentColor"></circle>
+                        </svg>
+                        录制
+                    </button>
+                </div>
+                
+                <!-- Camera Selection -->
+                <div class="camera-selection" id="camera-selection">
+                    <select id="camera-select" class="select">
+                        <option value="">选择摄像头...</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Side Panel -->
+            <aside class="side-panel" id="side-panel">
+                <!-- Model Selection -->
+                <div class="panel-section">
+                    <h3 class="section-title">模型设置</h3>
+                    <div class="form-group">
+                        <label for="model-select">检测模型:</label>
+                        <select id="model-select" class="select">
+                            <option value="blazepose">BlazePose (推荐)</option>
+                            <option value="movenet">MoveNet</option>
+                            <option value="posenet">PoseNet</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confidence-threshold">置信度阈值:</label>
+                        <input type="range" id="confidence-threshold" class="slider" min="0.1" max="1" step="0.1" value="0.7">
+                        <span class="slider-value" id="confidence-value">0.7</span>
+                    </div>
+                </div>
+                
+                <!-- Display Options -->
+                <div class="panel-section">
+                    <h3 class="section-title">显示选项</h3>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-skeleton" checked>
+                            <span class="checkmark"></span>
+                            显示骨架
+                        </label>
+                        
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-keypoints" checked>
+                            <span class="checkmark"></span>
+                            显示关键点
+                        </label>
+                        
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-confidence">
+                            <span class="checkmark"></span>
+                            显示置信度
+                        </label>
+                        
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-trajectory">
+                            <span class="checkmark"></span>
+                            显示轨迹
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Filter Settings -->
+                <div class="panel-section">
+                    <h3 class="section-title">滤波设置</h3>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable-smoothing" checked>
+                            <span class="checkmark"></span>
+                            启用平滑
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="smoothing-factor">平滑因子:</label>
+                        <input type="range" id="smoothing-factor" class="slider" min="0.1" max="1" step="0.1" value="0.8">
+                        <span class="slider-value" id="smoothing-value">0.8</span>
+                    </div>
+                </div>
+                
+                <!-- Analysis Options -->
+                <div class="panel-section">
+                    <h3 class="section-title">分析选项</h3>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable-biomechanics">
+                            <span class="checkmark"></span>
+                            生物力学分析
+                        </label>
+                        
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable-trajectory">
+                            <span class="checkmark"></span>
+                            轨迹分析
+                        </label>
+                        
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable-anomaly">
+                            <span class="checkmark"></span>
+                            异常检测
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Export Options -->
+                <div class="panel-section">
+                    <h3 class="section-title">数据导出</h3>
+                    <div class="button-group">
+                        <button class="btn btn-sm btn-outline" id="export-json-btn">导出JSON</button>
+                        <button class="btn btn-sm btn-outline" id="export-csv-btn">导出CSV</button>
+                        <button class="btn btn-sm btn-outline" id="export-video-btn">导出视频</button>
+                    </div>
+                </div>
+            </aside>
+        </main>
+        
+        <!-- Bottom Panel -->
+        <div class="bottom-panel" id="bottom-panel">
+            <!-- Analysis Results -->
+            <div class="analysis-results" id="analysis-results">
+                <div class="results-tabs">
+                    <button class="tab-btn active" data-tab="overview">概览</button>
+                    <button class="tab-btn" data-tab="biomechanics">生物力学</button>
+                    <button class="tab-btn" data-tab="trajectory">轨迹</button>
+                    <button class="tab-btn" data-tab="performance">性能</button>
+                </div>
+                
+                <div class="tab-content">
+                    <div class="tab-pane active" id="overview-tab">
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-label">检测状态</div>
+                                <div class="metric-value" id="detection-status">未开始</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">检测到的人数</div>
+                                <div class="metric-value" id="person-count">0</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">平均置信度</div>
+                                <div class="metric-value" id="avg-confidence">0%</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">处理时间</div>
+                                <div class="metric-value" id="processing-time">0ms</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-pane" id="biomechanics-tab">
+                        <div class="chart-container">
+                            <canvas id="biomechanics-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-pane" id="trajectory-tab">
+                        <div class="chart-container">
+                            <canvas id="trajectory-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-pane" id="performance-tab">
+                        <div class="chart-container">
+                            <canvas id="performance-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Error Modal -->
+    <div id="error-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">错误提示</h3>
+                <button class="modal-close" id="error-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="error-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                    </svg>
+                </div>
+                <p id="error-message">发生了未知错误</p>
+                <div class="error-actions">
+                    <button class="btn btn-primary" id="error-retry-btn">重试</button>
+                    <button class="btn btn-secondary" id="error-dismiss-btn">忽略</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Help Modal -->
+    <div id="help-modal" class="modal" style="display: none;">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 class="modal-title">使用帮助</h3>
+                <button class="modal-close" id="help-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="help-content">
+                    <h4>快速开始</h4>
+                    <ol>
+                        <li>点击"开始检测"按钮启动摄像头</li>
+                        <li>站在摄像头前，确保全身在画面内</li>
+                        <li>在右侧面板调整检测参数</li>
+                        <li>查看底部面板的分析结果</li>
+                    </ol>
+                    
+                    <h4>键盘快捷键</h4>
+                    <ul>
+                        <li><kbd>Space</kbd> - 开始/停止检测</li>
+                        <li><kbd>S</kbd> - 截图</li>
+                        <li><kbd>R</kbd> - 开始/停止录制</li>
+                        <li><kbd>F</kbd> - 全屏切换</li>
+                        <li><kbd>H</kbd> - 显示/隐藏帮助</li>
+                    </ul>
+                    
+                    <h4>功能说明</h4>
+                    <ul>
+                        <li><strong>生物力学分析</strong>：分析关节角度、力矩和运动效率</li>
+                        <li><strong>轨迹追踪</strong>：记录和分析身体关键点的运动轨迹</li>
+                        <li><strong>异常检测</strong>：识别异常姿态和运动模式</li>
+                        <li><strong>数据导出</strong>：支持JSON、CSV和视频格式导出</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+    
+    <!-- Scripts -->
+    <script type="module" src="./src/main.js"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch(registrationError => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模块导入测试</title>
+    <script type="importmap">
+    {
+        "imports": {
+            "@tensorflow/tfjs": "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js",
+            "@tensorflow/tfjs-backend-webgl": "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.15.0/dist/tf-backend-webgl.min.js",
+            "@tensorflow-models/pose-detection": "https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.0/dist/pose-detection.min.js",
+            "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+            "stats.js": "https://cdn.jsdelivr.net/npm/stats.js@0.17.0/build/stats.min.js"
+        }
+    }
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 模块导入测试</h1>
+    <div id="status" class="status loading">正在测试模块导入...</div>
+    <div id="results"></div>
+    
+    <script type="module">
+        const statusEl = document.getElementById('status');
+        const resultsEl = document.getElementById('results');
+        
+        function showStatus(message, type = 'loading') {
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+        
+        function addResult(test, success, error = null) {
+            const div = document.createElement('div');
+            div.className = `status ${success ? 'success' : 'error'}`;
+            div.innerHTML = `
+                <strong>${test}:</strong> ${success ? '✅ 成功' : '❌ 失败'}
+                ${error ? `<br><pre>${error}</pre>` : ''}
+            `;
+            resultsEl.appendChild(div);
+        }
+        
+        async function testModuleImports() {
+            const tests = [
+                {
+                    name: '导入 index.js',
+                    test: async () => {
+                        const module = await import('./index.js');
+                        return { PoseEstimator: module.PoseEstimator, utils: module.utils };
+                    }
+                },
+                {
+                    name: '检查 PoseEstimator 类',
+                    test: async () => {
+                        const { PoseEstimator } = await import('./index.js');
+                        if (typeof PoseEstimator !== 'function') {
+                            throw new Error('PoseEstimator 不是构造函数');
+                        }
+                        return true;
+                    }
+                },
+                {
+                    name: '检查 utils 对象',
+                    test: async () => {
+                        const { utils } = await import('./index.js');
+                        if (!utils || typeof utils.checkCompatibility !== 'function') {
+                            throw new Error('utils 对象或 checkCompatibility 方法不存在');
+                        }
+                        return true;
+                    }
+                },
+                {
+                    name: '浏览器兼容性检查',
+                    test: async () => {
+                        const { utils } = await import('./index.js');
+                        const compatibility = utils.checkCompatibility();
+                        return compatibility;
+                    }
+                },
+                {
+                    name: '创建 PoseEstimator 实例',
+                    test: async () => {
+                        const { PoseEstimator } = await import('./index.js');
+                        const canvas = document.createElement('canvas');
+                        const estimator = new PoseEstimator({ canvas });
+                        return estimator;
+                    }
+                }
+            ];
+            
+            let passedTests = 0;
+            
+            for (const { name, test } of tests) {
+                try {
+                    showStatus(`正在测试: ${name}`);
+                    const result = await test();
+                    addResult(name, true);
+                    passedTests++;
+                    
+                    if (name === '浏览器兼容性检查') {
+                        const div = document.createElement('div');
+                        div.className = 'status';
+                        div.innerHTML = `<strong>兼容性结果:</strong><pre>${JSON.stringify(result, null, 2)}</pre>`;
+                        resultsEl.appendChild(div);
+                    }
+                } catch (error) {
+                    addResult(name, false, error.message);
+                }
+            }
+            
+            const totalTests = tests.length;
+            if (passedTests === totalTests) {
+                showStatus(`🎉 所有测试通过! (${passedTests}/${totalTests})`, 'success');
+            } else {
+                showStatus(`⚠️ 部分测试失败 (${passedTests}/${totalTests})`, 'error');
+            }
+        }
+        
+        // 开始测试
+        testModuleImports().catch(error => {
+            showStatus('测试过程中发生错误', 'error');
+            addResult('测试执行', false, error.message);
+        });
+    </script>
+</body>
+</html>

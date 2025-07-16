@@ -7,6 +7,20 @@ import { PoseEstimator } from './components/PoseEstimator.js';
 import { uiManager } from './components/UIManager.js';
 import { offscreenRenderManager } from './utils/offscreenRenderManager.js';
 
+// 新增的分析器和组件
+import { BiomechanicsAnalyzer } from './analyzers/BiomechanicsAnalyzer.js';
+import { TrajectoryAnalyzer } from './analyzers/TrajectoryAnalyzer.js';
+import { PerformanceDashboard } from './dashboard/PerformanceDashboard.js';
+import { AIOptimizer } from './optimization/AIOptimizer.js';
+import { ErrorRecovery } from './error/ErrorRecovery.js';
+import { UserErrorHandler } from './error/UserErrorHandler.js';
+import { DataExporter } from './export/DataExporter.js';
+import { ConfigManager } from './config/ConfigManager.js';
+import { EventBus } from './utils/EventBus.js';
+import { Logger } from './utils/Logger.js';
+import { DeviceManager } from './utils/DeviceManager.js';
+import { StorageManager } from './utils/StorageManager.js';
+
 // 暴露到全局作用域以便调试和监控面板访问
 window.performanceMonitor = performanceMonitor;
 window.adaptiveFrameController = adaptiveFrameController;
@@ -30,6 +44,20 @@ class PoseEstimationApp {
             showFilterPanel: false,      // 默认关闭滤波器参数面板
             enableFilter: true
         };
+        
+        // 新增组件
+        this.eventBus = new EventBus();
+        this.logger = new Logger('PoseEstimationApp');
+        this.configManager = null;
+        this.storageManager = null;
+        this.deviceManager = null;
+        this.biomechanicsAnalyzer = null;
+        this.trajectoryAnalyzer = null;
+        this.performanceDashboard = null;
+        this.aiOptimizer = null;
+        this.errorRecovery = null;
+        this.userErrorHandler = null;
+        this.dataExporter = null;
         
         console.log('🚀 PoseEstimationApp已创建');
     }
@@ -58,9 +86,25 @@ class PoseEstimationApp {
             uiManager.showLoading('正在初始化Canvas...', '设置渲染环境');
             this.initCanvas();
             
+            // 初始化配置管理器
+            uiManager.showLoading('正在初始化配置...', '加载应用配置');
+            await this.initConfigManager();
+            
+            // 初始化存储管理器
+            uiManager.showLoading('正在初始化存储...', '连接本地存储');
+            await this.initStorageManager();
+            
+            // 初始化设备管理器
+            uiManager.showLoading('正在检测设备...', '扫描可用设备');
+            await this.initDeviceManager();
+            
             // 初始化缓存管理器
             uiManager.showLoading('正在初始化缓存...', '连接本地存储');
             await this.initCacheManager();
+            
+            // 初始化错误处理系统
+            uiManager.showLoading('正在初始化错误处理...', '设置错误恢复机制');
+            await this.initErrorHandling();
             
             // 预加载模型
             uiManager.showLoading('正在预加载模型...', '下载AI模型文件');
@@ -69,6 +113,22 @@ class PoseEstimationApp {
             // 创建姿态估计器
             uiManager.showLoading('正在创建姿态估计器...', '初始化AI引擎');
             this.createPoseEstimator();
+            
+            // 初始化分析器
+            uiManager.showLoading('正在初始化分析器...', '设置生物力学和轨迹分析');
+            await this.initAnalyzers();
+            
+            // 初始化性能仪表板
+            uiManager.showLoading('正在初始化性能监控...', '设置实时监控面板');
+            await this.initPerformanceDashboard();
+            
+            // 初始化AI优化器
+            uiManager.showLoading('正在初始化AI优化...', '设置智能优化系统');
+            await this.initAIOptimizer();
+            
+            // 初始化数据导出器
+            uiManager.showLoading('正在初始化数据导出...', '设置数据导出功能');
+            await this.initDataExporter();
             
             // 初始化UI
             this.initUI();
@@ -146,6 +206,48 @@ class PoseEstimationApp {
     }
     
     /**
+     * 初始化配置管理器
+     * @returns {Promise<void>}
+     */
+    async initConfigManager() {
+        try {
+            this.configManager = new ConfigManager();
+            await this.configManager.initialize();
+            this.logger.info('配置管理器初始化完成');
+        } catch (error) {
+            this.logger.warn('配置管理器初始化失败，使用默认配置:', error);
+        }
+    }
+    
+    /**
+     * 初始化存储管理器
+     * @returns {Promise<void>}
+     */
+    async initStorageManager() {
+        try {
+            this.storageManager = new StorageManager();
+            await this.storageManager.initialize();
+            this.logger.info('存储管理器初始化完成');
+        } catch (error) {
+            this.logger.warn('存储管理器初始化失败:', error);
+        }
+    }
+    
+    /**
+     * 初始化设备管理器
+     * @returns {Promise<void>}
+     */
+    async initDeviceManager() {
+        try {
+            this.deviceManager = new DeviceManager();
+            await this.deviceManager.initialize();
+            this.logger.info('设备管理器初始化完成');
+        } catch (error) {
+            this.logger.warn('设备管理器初始化失败:', error);
+        }
+    }
+    
+    /**
      * 初始化缓存管理器
      * @returns {Promise<void>}
      */
@@ -155,6 +257,32 @@ class PoseEstimationApp {
             console.log('✅ 缓存管理器初始化完成');
         } catch (error) {
             console.warn('⚠️ 缓存管理器初始化失败，将使用内存缓存:', error);
+        }
+    }
+    
+    /**
+     * 初始化错误处理系统
+     * @returns {Promise<void>}
+     */
+    async initErrorHandling() {
+        try {
+            // 初始化错误恢复系统
+            this.errorRecovery = new ErrorRecovery({
+                eventBus: this.eventBus,
+                logger: this.logger
+            });
+            await this.errorRecovery.initialize();
+            
+            // 初始化用户错误处理器
+            this.userErrorHandler = new UserErrorHandler({
+                eventBus: this.eventBus,
+                uiManager: uiManager
+            });
+            await this.userErrorHandler.initialize();
+            
+            this.logger.info('错误处理系统初始化完成');
+        } catch (error) {
+            this.logger.warn('错误处理系统初始化失败:', error);
         }
     }
     
@@ -177,6 +305,83 @@ class PoseEstimationApp {
     createPoseEstimator() {
         this.poseEstimator = new PoseEstimator(this.canvas, this.currentOptions);
         console.log('✅ 姿态估计器创建完成');
+    }
+    
+    /**
+     * 初始化分析器
+     * @returns {Promise<void>}
+     */
+    async initAnalyzers() {
+        try {
+            // 初始化生物力学分析器
+            this.biomechanicsAnalyzer = new BiomechanicsAnalyzer({
+                eventBus: this.eventBus,
+                config: this.configManager?.getConfig('biomechanics') || {}
+            });
+            await this.biomechanicsAnalyzer.initialize();
+            
+            // 初始化轨迹分析器
+            this.trajectoryAnalyzer = new TrajectoryAnalyzer({
+                eventBus: this.eventBus,
+                config: this.configManager?.getConfig('trajectory') || {}
+            });
+            await this.trajectoryAnalyzer.initialize();
+            
+            this.logger.info('分析器初始化完成');
+        } catch (error) {
+            this.logger.warn('分析器初始化失败:', error);
+        }
+    }
+    
+    /**
+     * 初始化性能仪表板
+     * @returns {Promise<void>}
+     */
+    async initPerformanceDashboard() {
+        try {
+            this.performanceDashboard = new PerformanceDashboard({
+                container: document.getElementById('performance-chart'),
+                eventBus: this.eventBus
+            });
+            await this.performanceDashboard.initialize();
+            this.logger.info('性能仪表板初始化完成');
+        } catch (error) {
+            this.logger.warn('性能仪表板初始化失败:', error);
+        }
+    }
+    
+    /**
+     * 初始化AI优化器
+     * @returns {Promise<void>}
+     */
+    async initAIOptimizer() {
+        try {
+            this.aiOptimizer = new AIOptimizer({
+                eventBus: this.eventBus,
+                performanceMonitor: performanceMonitor
+            });
+            await this.aiOptimizer.initialize();
+            this.logger.info('AI优化器初始化完成');
+        } catch (error) {
+            this.logger.warn('AI优化器初始化失败:', error);
+        }
+    }
+    
+    /**
+     * 初始化数据导出器
+     * @returns {Promise<void>}
+     */
+    async initDataExporter() {
+        try {
+            this.dataExporter = new DataExporter({
+                eventBus: this.eventBus,
+                storageManager: this.storageManager
+            });
+            await this.dataExporter.initialize();
+            this.logger.info('数据导出器初始化完成');
+        } catch (error) {
+            this.logger.warn('数据导出器初始化失败:', error);
+        }
     }
     
     /**
@@ -250,6 +455,9 @@ class PoseEstimationApp {
         // 定期更新状态显示
         this.startStatusUpdates();
         
+        // 设置事件监听器
+        this.setupEventListeners();
+        
         // 根据初始设置显示或隐藏系统监控面板
         if (this.currentOptions.showPerformanceInfo) {
             uiManager.showStatus();
@@ -282,6 +490,185 @@ class PoseEstimationApp {
                 uiManager.updateStatus(status);
             }
         }, 1000);
+    }
+    
+    /**
+     * 设置事件监听器
+     */
+    setupEventListeners() {
+        // 监听姿态检测结果
+        this.eventBus.on('pose:detected', this.handlePoseDetected.bind(this));
+        
+        // 监听错误事件
+        this.eventBus.on('error:critical', this.handleCriticalError.bind(this));
+        this.eventBus.on('error:recoverable', this.handleRecoverableError.bind(this));
+        
+        // 监听性能事件
+        this.eventBus.on('performance:warning', this.handlePerformanceWarning.bind(this));
+        this.eventBus.on('performance:critical', this.handlePerformanceCritical.bind(this));
+        
+        // 监听分析结果
+        this.eventBus.on('biomechanics:analyzed', this.handleBiomechanicsResult.bind(this));
+        this.eventBus.on('trajectory:analyzed', this.handleTrajectoryResult.bind(this));
+        
+        // 监听AI优化事件
+        this.eventBus.on('ai:optimized', this.handleAIOptimization.bind(this));
+        
+        // 监听数据导出事件
+        this.eventBus.on('export:completed', this.handleExportCompleted.bind(this));
+        this.eventBus.on('export:failed', this.handleExportFailed.bind(this));
+        
+        this.logger.info('事件监听器设置完成');
+    }
+    
+    /**
+     * 处理姿态检测结果
+     */
+    handlePoseDetected(data) {
+        try {
+            // 发送数据给分析器
+            if (this.biomechanicsAnalyzer) {
+                this.biomechanicsAnalyzer.analyze(data.poses);
+            }
+            
+            if (this.trajectoryAnalyzer) {
+                this.trajectoryAnalyzer.analyze(data.poses);
+            }
+            
+            // 更新性能仪表板
+            if (this.performanceDashboard) {
+                this.performanceDashboard.updateMetrics({
+                    fps: data.fps,
+                    latency: data.processingTime,
+                    confidence: data.averageConfidence
+                });
+            }
+            
+            // 触发AI优化
+            if (this.aiOptimizer) {
+                this.aiOptimizer.processFrame(data);
+            }
+            
+        } catch (error) {
+            this.logger.error('处理姿态检测结果失败:', error);
+        }
+    }
+    
+    /**
+     * 处理关键错误
+     */
+    handleCriticalError(error) {
+        this.logger.error('关键错误:', error);
+        uiManager.showError(`关键错误: ${error.message}`, 0);
+        
+        // 尝试错误恢复
+        if (this.errorRecovery) {
+            this.errorRecovery.handleError(error);
+        }
+    }
+    
+    /**
+     * 处理可恢复错误
+     */
+    handleRecoverableError(error) {
+        this.logger.warn('可恢复错误:', error);
+        uiManager.showError(`警告: ${error.message}`, 3000);
+    }
+    
+    /**
+     * 处理性能警告
+     */
+    handlePerformanceWarning(warning) {
+        this.logger.warn('性能警告:', warning);
+        
+        // 触发AI优化
+        if (this.aiOptimizer) {
+            this.aiOptimizer.optimize(warning);
+        }
+    }
+    
+    /**
+     * 处理性能关键问题
+     */
+    handlePerformanceCritical(issue) {
+        this.logger.error('性能关键问题:', issue);
+        uiManager.showError(`性能问题: ${issue.message}`, 5000);
+        
+        // 强制优化
+        if (this.aiOptimizer) {
+            this.aiOptimizer.forceOptimize(issue);
+        }
+    }
+    
+    /**
+     * 处理生物力学分析结果
+     */
+    handleBiomechanicsResult(result) {
+        this.logger.info('生物力学分析完成:', result);
+        
+        // 更新UI显示
+        this.eventBus.emit('ui:updateBiomechanics', result);
+    }
+    
+    /**
+     * 处理轨迹分析结果
+     */
+    handleTrajectoryResult(result) {
+        this.logger.info('轨迹分析完成:', result);
+        
+        // 更新UI显示
+        this.eventBus.emit('ui:updateTrajectory', result);
+    }
+    
+    /**
+     * 处理AI优化结果
+     */
+    handleAIOptimization(optimization) {
+        this.logger.info('AI优化完成:', optimization);
+        
+        // 应用优化设置
+        if (optimization.settings) {
+            this.applyOptimizationSettings(optimization.settings);
+        }
+    }
+    
+    /**
+     * 处理导出完成
+     */
+    handleExportCompleted(result) {
+        this.logger.info('数据导出完成:', result);
+        uiManager.showSuccess(`导出完成: ${result.filename}`);
+    }
+    
+    /**
+     * 处理导出失败
+     */
+    handleExportFailed(error) {
+        this.logger.error('数据导出失败:', error);
+        uiManager.showError(`导出失败: ${error.message}`);
+    }
+    
+    /**
+     * 应用优化设置
+     */
+    applyOptimizationSettings(settings) {
+        try {
+            if (settings.modelType && settings.modelType !== this.currentOptions.modelType) {
+                this.changeModel(settings.modelType);
+            }
+            
+            if (settings.filterParams && this.poseEstimator?.filterManager) {
+                this.poseEstimator.filterManager.updateParameters(settings.filterParams);
+            }
+            
+            if (settings.renderingOptions) {
+                Object.assign(this.currentOptions, settings.renderingOptions);
+            }
+            
+            this.logger.info('优化设置已应用');
+        } catch (error) {
+            this.logger.error('应用优化设置失败:', error);
+        }
     }
     
     /**
