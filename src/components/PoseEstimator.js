@@ -286,7 +286,6 @@ export class PoseEstimator {
      */
     async _detectPoseInRealTime() {
         if (!this.isRunning) {
-            console.log('🛑 检测循环停止：isRunning为false');
             this.animationId = null;
             return;
         }
@@ -294,11 +293,9 @@ export class PoseEstimator {
         try {
             // 立即设置下一帧的animationId，确保检测循环持续运行
             this.animationId = requestAnimationFrame(() => this._detectPoseInRealTime());
-            console.log('🔄 检测循环运行中，animationId:', this.animationId);
             
             // 检查是否应该处理当前帧（自适应帧率控制）
             if (!adaptiveFrameController.shouldProcessFrame()) {
-                console.log('⏭️ 跳过当前帧（帧率控制）');
                 return;
             }
             
@@ -363,7 +360,7 @@ export class PoseEstimator {
             const now = performance.now();
             if (now - this.stats.lastStatsUpdate > 5000) {
                 performanceMonitor.logPerformance();
-                adaptiveFrameController.logPerformance(); // 添加帧率控制器日志
+                adaptiveFrameController.logPerformance();
                 this.stats.lastStatsUpdate = now;
             }
             
@@ -384,7 +381,7 @@ export class PoseEstimator {
             
             // 如果错误过于频繁（1秒内超过5次），停止检测避免无限循环
             if (this.stats.errorCount > 5) {
-                console.error('🚨 错误过于频繁，停止姿态检测以避免无限循环');
+                console.error('🚨 错误过于频繁，停止姿态检测');
                 this.isRunning = false;
                 return;
             }
@@ -588,9 +585,6 @@ export class PoseEstimator {
         // 启动性能监控
         performanceMonitor.start();
         
-        // 确保检测循环能够正常启动
-        console.log('🎬 启动检测循环...');
-        
         // 重置动画ID和错误计数
         this.animationId = null;
         this.stats.errorCount = 0;
@@ -602,7 +596,6 @@ export class PoseEstimator {
         // 直接启动检测循环
         try {
             this._detectPoseInRealTime();
-            console.log('✅ 检测循环已启动');
         } catch (error) {
             console.error('❌ 启动检测循环失败:', error);
             this.isRunning = false;
