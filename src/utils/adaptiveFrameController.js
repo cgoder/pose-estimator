@@ -73,9 +73,16 @@ export class AdaptiveFrameController {
         }
         
         // WebGL 性能测试
+        let canvas = null;
+        let gl = null;
+        
         try {
-            const canvas = document.createElement('canvas');
-            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+            canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            gl = canvas.getContext('webgl2', { preserveDrawingBuffer: false }) || 
+                 canvas.getContext('webgl', { preserveDrawingBuffer: false });
+            
             if (gl) {
                 const renderer = gl.getParameter(gl.RENDERER);
                 if (renderer.includes('NVIDIA') || renderer.includes('AMD')) {
@@ -86,6 +93,19 @@ export class AdaptiveFrameController {
             }
         } catch (error) {
             score -= 10;
+        } finally {
+            // 清理WebGL上下文
+            if (gl) {
+                const loseContext = gl.getExtension('WEBGL_lose_context');
+                if (loseContext) {
+                    loseContext.loseContext();
+                }
+            }
+            if (canvas) {
+                canvas.width = 1;
+                canvas.height = 1;
+                canvas = null;
+            }
         }
         
         // 简单计算性能测试

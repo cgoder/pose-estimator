@@ -5,8 +5,11 @@
 import KinematicsAnalyzer from './KinematicsAnalyzer.js';
 
 class BiomechanicsAnalyzer {
-    constructor() {
+    constructor(options = {}) {
         this.name = 'BiomechanicsAnalyzer';
+        this.options = options;
+        this.eventBus = options.eventBus;
+        this.config = options.config || {};
         this.kinematicsAnalyzer = new KinematicsAnalyzer();
         
         // 人体测量学参数（相对比例）
@@ -54,6 +57,16 @@ class BiomechanicsAnalyzer {
         this.forceHistory = new Map();
         this.powerHistory = new Map();
         this.efficiencyHistory = new Map();
+    }
+
+    /**
+     * 初始化分析器
+     */
+    async initialize() {
+        // 初始化逻辑
+        if (this.eventBus) {
+            this.eventBus.emit('analyzer:initialized', { name: this.name });
+        }
     }
 
     /**

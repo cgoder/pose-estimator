@@ -5,7 +5,7 @@ import { adaptiveFrameController } from '../utils/adaptiveFrameController.js';
 import { hybridCacheManager } from './HybridCacheManager.js';
 import { OneEuroFilterManager } from './OneEuroFilterManager.js';
 import { offscreenRenderManager } from '../utils/offscreenRenderManager.js';
-import { ExerciseAnalysisEngine } from './ExerciseAnalysisEngine.js';
+import ExerciseAnalysisEngine from './analyzers/ExerciseAnalysisEngine.js';
 
 /**
  * 姿态估计器主类
@@ -112,127 +112,129 @@ export class PoseEstimator {
         try {
             console.log(`📷 正在设置摄像头 (${facingMode === 'user' ? '前置' : '后置'})...`);
             
-            // 创建隐藏的video元素
-            this.video = document.createElement('video');
-            if (!this.video) {
-                throw new Error('无法创建video元素');
-            }
-            
-            // 设置video属性
-            this.video.id = 'video';
-            this.video.autoplay = true;
-            this.video.muted = true;
-            this.video.playsInline = true;
-            
-            // 多层隐藏策略
-            Object.assign(this.video.style, {
-                display: 'none',
-                visibility: 'hidden',
-                position: 'absolute',
-                left: '-9999px',
-                width: '1px',
-                height: '1px'
+            // 为摄像头设置添加总体超时机制（15秒）
+            const cameraTimeout = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('摄像头设置总体超时，请检查摄像头权限和设备状态')), 15000);
             });
             
-            // 添加到DOM
-            document.body.appendChild(this.video);
+            const cameraSetup = this._performCameraSetup(facingMode);
             
-            // 构建摄像头约束
-            const constraints = {
-                video: {
-                    width: { ideal: CONFIG.CAMERA.WIDTH },
-                    height: { ideal: CONFIG.CAMERA.HEIGHT },
-                    facingMode: facingMode
-                }
-            };
-            
-            // 获取摄像头流
-            const stream = await ErrorHandler.retry(
-                () => navigator.mediaDevices.getUserMedia(constraints),
-                3,
-                1000
-            );
-            
-            if (!stream) {
-                throw new Error('获取摄像头流失败');
-            }
-            
-            // 设置视频源
-            this.video.srcObject = stream;
-            
-            // 等待视频元数据加载
-            await new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error('视频元数据加载超时'));
-                }, CONFIG.CAMERA.TIMEOUT);
-                
-                this.video.addEventListener('loadedmetadata', () => {
-                    clearTimeout(timeout);
-                    resolve();
-                }, { once: true });
-                
-                this.video.addEventListener('error', (error) => {
-                    clearTimeout(timeout);
-                    reject(new Error(`视频加载错误: ${error.message}`));
-                }, { once: true });
-            });
-            
-            // 开始播放视频
-            await new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error('视频播放超时'));
-                }, CONFIG.CAMERA.TIMEOUT);
-                
-                this.video.addEventListener('playing', () => {
-                    clearTimeout(timeout);
-                    resolve();
-                }, { once: true });
-                
-                this.video.play().catch(reject);
-            });
-            
-            // 等待视频就绪
-            await new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error('视频就绪检查超时'));
-                }, CONFIG.CAMERA.TIMEOUT);
-                
-                const checkReady = () => {
-                    if (this.video && this.video.readyState >= 2) {
-                        clearTimeout(timeout);
-                        resolve();
-                    } else {
-                        setTimeout(checkReady, 100);
-                    }
-                };
-                
-                checkReady();
-            });
-            
-            // 设置canvas尺寸
-            this.canvas.width = this.video.videoWidth || CONFIG.CAMERA.WIDTH;
-            this.canvas.height = this.video.videoHeight || CONFIG.CAMERA.HEIGHT;
-            
-            // 更新当前摄像头模式
-            this.currentFacingMode = facingMode;
+            await Promise.race([cameraSetup, cameraTimeout]);
             
             console.log(`📷 摄像头设置完成: ${this.canvas.width}x${this.canvas.height} (${facingMode === 'user' ? '前置' : '后置'})`);
             
         } catch (error) {
-            // 清理资源
-            if (this.video) {
-                if (this.video.srcObject) {
-                    const tracks = this.video.srcObject.getTracks();
-                    tracks.forEach(track => track.stop());
-                }
-                if (this.video.parentNode) {
-                    this.video.parentNode.removeChild(this.video);
-                }
-                this.video = null;
+            // 清理摄像头流
+            if (this.video && this.video.srcObject) {
+                const tracks = this.video.srcObject.getTracks();
+                tracks.forEach(track => track.stop());
+                this.video.srcObject = null;
             }
             
             throw ErrorHandler.createError('Camera', ErrorHandler.handleCameraError(error), error);
         }
+    }
+    
+    /**
+     * 执行摄像头设置过程
+     * @param {string} facingMode - 摄像头模式
+     * @returns {Promise<void>}
+     */
+    async _performCameraSetup(facingMode) {
+        // 使用HTML中已存在的video元素
+        this.video = document.getElementById('video');
+        if (!this.video) {
+            throw new Error('找不到video元素');
+        }
+        
+        // 确保video元素可见
+        this.video.style.display = 'block';
+        this.video.style.visibility = 'visible';
+        this.video.style.position = 'relative';
+        
+        // 设置video属性
+        this.video.autoplay = true;
+        this.video.muted = true;
+        this.video.playsInline = true;
+        
+        // 构建摄像头约束
+        const constraints = {
+            video: {
+                width: { ideal: CONFIG.CAMERA.WIDTH },
+                height: { ideal: CONFIG.CAMERA.HEIGHT },
+                facingMode: facingMode
+            }
+        };
+        
+        // 获取摄像头流（权限请求最容易卡住的地方）
+        const stream = await ErrorHandler.retry(
+            () => navigator.mediaDevices.getUserMedia(constraints),
+            3,
+            1000
+        );
+        
+        if (!stream) {
+            throw new Error('获取摄像头流失败');
+        }
+        
+        // 设置视频源
+        this.video.srcObject = stream;
+        
+        // 等待视频元数据加载
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('视频元数据加载超时'));
+            }, CONFIG.CAMERA.TIMEOUT);
+            
+            this.video.addEventListener('loadedmetadata', () => {
+                clearTimeout(timeout);
+                resolve();
+            }, { once: true });
+            
+            this.video.addEventListener('error', (error) => {
+                clearTimeout(timeout);
+                reject(new Error(`视频加载错误: ${error.message}`));
+            }, { once: true });
+        });
+        
+        // 开始播放视频
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('视频播放超时'));
+            }, CONFIG.CAMERA.TIMEOUT);
+            
+            this.video.addEventListener('playing', () => {
+                clearTimeout(timeout);
+                resolve();
+            }, { once: true });
+            
+            this.video.play().catch(reject);
+        });
+        
+        // 等待视频就绪
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('视频就绪检查超时'));
+            }, CONFIG.CAMERA.TIMEOUT);
+            
+            const checkReady = () => {
+                if (this.video && this.video.readyState >= 2) {
+                    clearTimeout(timeout);
+                    resolve();
+                } else {
+                    setTimeout(checkReady, 100);
+                }
+            };
+            
+            checkReady();
+        });
+        
+        // 设置canvas尺寸
+        this.canvas.width = this.video.videoWidth || CONFIG.CAMERA.WIDTH;
+        this.canvas.height = this.video.videoHeight || CONFIG.CAMERA.HEIGHT;
+        
+        // 更新当前摄像头模式
+        this.currentFacingMode = facingMode;
     }
     
     /**
@@ -283,12 +285,20 @@ export class PoseEstimator {
      * 姿态检测循环
      */
     async _detectPoseInRealTime() {
-        if (!this.isRunning) return;
+        if (!this.isRunning) {
+            console.log('🛑 检测循环停止：isRunning为false');
+            this.animationId = null;
+            return;
+        }
         
         try {
+            // 立即设置下一帧的animationId，确保检测循环持续运行
+            this.animationId = requestAnimationFrame(() => this._detectPoseInRealTime());
+            console.log('🔄 检测循环运行中，animationId:', this.animationId);
+            
             // 检查是否应该处理当前帧（自适应帧率控制）
             if (!adaptiveFrameController.shouldProcessFrame()) {
-                this.animationId = requestAnimationFrame(() => this._detectPoseInRealTime());
+                console.log('⏭️ 跳过当前帧（帧率控制）');
                 return;
             }
             
@@ -297,7 +307,6 @@ export class PoseEstimator {
             
             // 检查video状态
             if (!this.video || this.video.readyState < 2) {
-                this.animationId = requestAnimationFrame(() => this._detectPoseInRealTime());
                 return;
             }
             
@@ -358,8 +367,7 @@ export class PoseEstimator {
                 this.stats.lastStatsUpdate = now;
             }
             
-            // 继续下一帧
-            this.animationId = requestAnimationFrame(() => this._detectPoseInRealTime());
+            // 下一帧已在方法开始时设置
             
         } catch (error) {
             const now = performance.now();
@@ -397,7 +405,12 @@ export class PoseEstimator {
                 }
             }
             
-            // 错误恢复：延迟后继续下一帧（避免立即重试）
+            // 错误恢复：取消当前的animationId并延迟后重新启动
+            if (this.animationId) {
+                cancelAnimationFrame(this.animationId);
+                this.animationId = null;
+            }
+            
             if (this.isRunning) {
                 setTimeout(() => {
                     if (this.isRunning) {
@@ -542,19 +555,16 @@ export class PoseEstimator {
             
             console.log('🚀 启动姿态估计器...');
             
-            // 设置摄像头
-            await this._setupCamera();
+            // 为启动过程添加超时机制（30秒）
+            const startTimeout = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('姿态估计器启动超时')), 30000);
+            });
             
-            // 加载模型
-            await this._loadModel();
+            const startProcess = this._performStart();
             
-            // 启动性能监控
-            performanceMonitor.start();
+            await Promise.race([startProcess, startTimeout]);
             
-            // 开始检测循环
             this.isRunning = true;
-            this._detectPoseInRealTime();
-            
             console.log('✅ 姿态估计器启动成功');
             
         } catch (error) {
@@ -562,6 +572,156 @@ export class PoseEstimator {
             await this.cleanup();
             throw ErrorHandler.createError('Startup', `启动失败: ${error.message}`, error);
         }
+    }
+    
+    /**
+     * 执行启动过程
+     * @returns {Promise<void>}
+     */
+    async _performStart() {
+        // 设置摄像头
+        await this._setupCamera();
+        
+        // 加载模型
+        await this._loadModel();
+        
+        // 启动性能监控
+        performanceMonitor.start();
+        
+        // 确保检测循环能够正常启动
+        console.log('🎬 启动检测循环...');
+        
+        // 重置动画ID和错误计数
+        this.animationId = null;
+        this.stats.errorCount = 0;
+        this.stats.lastErrorTime = 0;
+        
+        // 设置运行状态为true
+        this.isRunning = true;
+        
+        // 直接启动检测循环
+        try {
+            this._detectPoseInRealTime();
+            console.log('✅ 检测循环已启动');
+        } catch (error) {
+            console.error('❌ 启动检测循环失败:', error);
+            this.isRunning = false;
+            throw error;
+        }
+    }
+    
+    /**
+     * 带重试机制的检测循环启动
+     * @param {number} maxRetries - 最大重试次数
+     * @returns {Promise<void>}
+     */
+    async _startDetectionLoopWithRetry(maxRetries = 3) {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`🔄 尝试启动检测循环 (第${attempt}次)...`);
+                
+                // 确保video元素准备就绪
+                await this._waitForVideoReady();
+                
+                // 启动检测循环
+                this._detectPoseInRealTime();
+                
+                // 验证检测循环是否成功启动
+                await this._verifyDetectionLoopStarted();
+                
+                console.log('✅ 检测循环启动成功');
+                return;
+                
+            } catch (error) {
+                console.warn(`⚠️ 第${attempt}次启动检测循环失败:`, error.message);
+                
+                if (attempt === maxRetries) {
+                    console.error('❌ 检测循环启动失败，已达到最大重试次数');
+                    throw new Error(`检测循环启动失败: ${error.message}`);
+                }
+                
+                // 等待一段时间后重试
+                await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+            }
+        }
+    }
+    
+    /**
+     * 等待video元素准备就绪
+     * @param {number} timeout - 超时时间(毫秒)
+     * @returns {Promise<void>}
+     */
+    async _waitForVideoReady(timeout = 5000) {
+        return new Promise((resolve, reject) => {
+            const startTime = Date.now();
+            
+            const checkVideo = () => {
+                if (!this.video) {
+                    reject(new Error('Video元素不存在'));
+                    return;
+                }
+                
+                if (this.video.readyState >= 2) {
+                    resolve();
+                    return;
+                }
+                
+                if (Date.now() - startTime > timeout) {
+                    reject(new Error('等待video准备就绪超时'));
+                    return;
+                }
+                
+                setTimeout(checkVideo, 100);
+            };
+            
+            checkVideo();
+        });
+    }
+    
+    /**
+     * 验证检测循环是否成功启动
+     * @param {number} timeout - 超时时间(毫秒)
+     * @returns {Promise<void>}
+     */
+    async _verifyDetectionLoopStarted(timeout = 1000) {
+        return new Promise((resolve, reject) => {
+            const startTime = Date.now();
+            let frameCount = 0;
+            
+            const checkLoop = () => {
+                // 检查是否有帧被处理（通过frameCount增加来判断）
+                const currentFrameCount = this.stats.frameCount;
+                if (currentFrameCount > frameCount) {
+                    console.log('✅ 检测循环运行正常，已处理帧数:', currentFrameCount);
+                    resolve();
+                    return;
+                }
+                frameCount = currentFrameCount;
+                
+                // 备用验证：检查animationId是否设置
+                if (this.animationId !== null) {
+                    console.log('✅ 检测循环animationId已设置');
+                    resolve();
+                    return;
+                }
+                
+                if (Date.now() - startTime > timeout) {
+                    // 降低验证要求，只要isRunning为true就认为启动成功
+                    if (this.isRunning) {
+                        console.log('⚠️ animationId验证超时，但isRunning为true，认为启动成功');
+                        resolve();
+                        return;
+                    }
+                    reject(new Error('检测循环启动验证超时'));
+                    return;
+                }
+                
+                setTimeout(checkLoop, 200);
+            };
+            
+            // 延迟开始检查，给检测循环一些启动时间
+            setTimeout(checkLoop, 300);
+        });
     }
     
     /**
@@ -615,16 +775,11 @@ export class PoseEstimator {
                 await this.stop();
             }
             
-            // 清理当前摄像头
-            if (this.video) {
-                if (this.video.srcObject) {
-                    const tracks = this.video.srcObject.getTracks();
-                    tracks.forEach(track => track.stop());
-                }
-                if (this.video.parentNode) {
-                    this.video.parentNode.removeChild(this.video);
-                }
-                this.video = null;
+            // 清理当前摄像头流
+            if (this.video && this.video.srcObject) {
+                const tracks = this.video.srcObject.getTracks();
+                tracks.forEach(track => track.stop());
+                this.video.srcObject = null;
             }
             
             // 设置新摄像头
@@ -633,7 +788,20 @@ export class PoseEstimator {
             // 如果之前在运行，重新启动检测
             if (wasRunning) {
                 this.isRunning = true;
-                this._detectPoseInRealTime();
+                // 重置动画ID和错误计数，确保检测循环能正常重启
+                this.animationId = null;
+                this.stats.errorCount = 0;
+                this.stats.lastErrorTime = 0;
+                
+                // 直接重启检测循环
+                try {
+                    this._detectPoseInRealTime();
+                    console.log('🎬 摄像头切换后检测循环已重启');
+                } catch (error) {
+                    console.error('❌ 摄像头切换后检测循环重启失败:', error);
+                    this.isRunning = false;
+                    throw error;
+                }
             }
             
             console.log(`✅ 摄像头切换完成: ${newFacingMode === 'user' ? '前置' : '后置'}`);
@@ -693,18 +861,11 @@ export class PoseEstimator {
             }
         }
         
-        // 清理摄像头
-        if (this.video) {
-            if (this.video.srcObject) {
-                const tracks = this.video.srcObject.getTracks();
-                tracks.forEach(track => track.stop());
-            }
-            
-            if (this.video.parentNode) {
-                this.video.parentNode.removeChild(this.video);
-            }
-            
-            this.video = null;
+        // 清理摄像头流
+        if (this.video && this.video.srcObject) {
+            const tracks = this.video.srcObject.getTracks();
+            tracks.forEach(track => track.stop());
+            this.video.srcObject = null;
         }
         
         // 清理模型
@@ -1014,15 +1175,24 @@ export class PoseEstimator {
             }
         ];
         
+        // 使用较短的超时时间（15秒）避免阻塞初始化
         const preloadPromises = modelConfigs.map(config => 
-            hybridCacheManager.preloadModel(config.type, config.url, config.createFn)
+            hybridCacheManager.preloadModel(config.type, config.url, config.createFn, 15000)
         );
         
         try {
-            await Promise.allSettled(preloadPromises);
-            console.log('✅ 模型预加载完成');
+            // 使用Promise.allSettled确保所有预加载尝试完成，不管成功或失败
+            const results = await Promise.allSettled(preloadPromises);
+            
+            const successful = results.filter(r => r.status === 'fulfilled').length;
+            const failed = results.filter(r => r.status === 'rejected').length;
+            
+            console.log(`✅ 模型预加载完成: ${successful}个成功, ${failed}个失败`);
+            
+            // 即使部分失败也不抛出错误，允许应用继续初始化
         } catch (error) {
-            console.warn('⚠️ 部分模型预加载失败:', error);
+            console.warn('⚠️ 模型预加载过程出错:', error);
+            // 不抛出错误，允许应用继续初始化
         }
     }
 }

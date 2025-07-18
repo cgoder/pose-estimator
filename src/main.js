@@ -10,16 +10,16 @@ import { offscreenRenderManager } from './utils/offscreenRenderManager.js';
 // 新增的分析器和组件
 import { BiomechanicsAnalyzer } from './analyzers/BiomechanicsAnalyzer.js';
 import { TrajectoryAnalyzer } from './analyzers/TrajectoryAnalyzer.js';
-import { PerformanceDashboard } from './dashboard/PerformanceDashboard.js';
-import { AIOptimizer } from './optimization/AIOptimizer.js';
-import { ErrorRecovery } from './error/ErrorRecovery.js';
-import { UserErrorHandler } from './error/UserErrorHandler.js';
-import { DataExporter } from './export/DataExporter.js';
-import { ConfigManager } from './config/ConfigManager.js';
+import PerformanceDashboard from './components/PerformanceDashboard.js';
+import { AIOptimizer } from './components/AIOptimizer.js';
+import { ErrorRecovery } from './utils/ErrorRecovery.js';
+import { UserErrorHandler } from './utils/UserErrorHandler.js';
+import { DataExporter } from './data/DataExporter.js';
+import { ConfigManager } from './core/ConfigManager.js';
 import { EventBus } from './utils/EventBus.js';
 import { Logger } from './utils/Logger.js';
-import { DeviceManager } from './utils/DeviceManager.js';
-import { StorageManager } from './utils/StorageManager.js';
+import { DeviceManager } from './core/DeviceManager.js';
+import { StorageManager } from './core/StorageManager.js';
 
 // 暴露到全局作用域以便调试和监控面板访问
 window.performanceMonitor = performanceMonitor;
@@ -79,67 +79,14 @@ class PoseEstimationApp {
             uiManager.init();
             uiManager.showLoading('正在初始化应用...', '检查环境兼容性');
             
-            // 环境检查
-            await this.performEnvironmentChecks();
+            // 为整个初始化过程添加超时机制（60秒）
+            const initTimeout = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('应用初始化超时')), 60000);
+            });
             
-            // 初始化Canvas
-            uiManager.showLoading('正在初始化Canvas...', '设置渲染环境');
-            this.initCanvas();
+            const initProcess = this.performInit();
             
-            // 初始化配置管理器
-            uiManager.showLoading('正在初始化配置...', '加载应用配置');
-            await this.initConfigManager();
-            
-            // 初始化存储管理器
-            uiManager.showLoading('正在初始化存储...', '连接本地存储');
-            await this.initStorageManager();
-            
-            // 初始化设备管理器
-            uiManager.showLoading('正在检测设备...', '扫描可用设备');
-            await this.initDeviceManager();
-            
-            // 初始化缓存管理器
-            uiManager.showLoading('正在初始化缓存...', '连接本地存储');
-            await this.initCacheManager();
-            
-            // 初始化错误处理系统
-            uiManager.showLoading('正在初始化错误处理...', '设置错误恢复机制');
-            await this.initErrorHandling();
-            
-            // 预加载模型
-            uiManager.showLoading('正在预加载模型...', '下载AI模型文件');
-            await this.preloadModels();
-            
-            // 创建姿态估计器
-            uiManager.showLoading('正在创建姿态估计器...', '初始化AI引擎');
-            this.createPoseEstimator();
-            
-            // 初始化分析器
-            uiManager.showLoading('正在初始化分析器...', '设置生物力学和轨迹分析');
-            await this.initAnalyzers();
-            
-            // 初始化性能仪表板
-            uiManager.showLoading('正在初始化性能监控...', '设置实时监控面板');
-            await this.initPerformanceDashboard();
-            
-            // 初始化AI优化器
-            uiManager.showLoading('正在初始化AI优化...', '设置智能优化系统');
-            await this.initAIOptimizer();
-            
-            // 初始化数据导出器
-            uiManager.showLoading('正在初始化数据导出...', '设置数据导出功能');
-            await this.initDataExporter();
-            
-            // 初始化UI
-            this.initUI();
-            
-            // 启动姿态估计器
-            uiManager.showLoading('正在启动摄像头...', '获取视频流');
-            await this.poseEstimator.start();
-            
-            // 隐藏加载状态
-            uiManager.hideLoading();
-            uiManager.showSuccess('姿态估计器启动成功！');
+            await Promise.race([initProcess, initTimeout]);
             
             this.isInitialized = true;
             console.log('✅ 应用初始化完成');
@@ -151,6 +98,89 @@ class PoseEstimationApp {
             console.error('❌ 应用初始化失败:', error);
             throw error;
         }
+    }
+    
+    /**
+     * 执行初始化过程
+     * @returns {Promise<void>}
+     */
+    async performInit() {
+        // 环境检查
+        await this.performEnvironmentChecks();
+        
+        // 初始化Canvas
+        uiManager.showLoading('正在初始化Canvas...', '设置渲染环境');
+        this.initCanvas();
+        
+        // 初始化配置管理器
+        uiManager.showLoading('正在初始化配置...', '加载应用配置');
+        await this.initConfigManager();
+        
+        // 初始化存储管理器
+        uiManager.showLoading('正在初始化存储...', '连接本地存储');
+        await this.initStorageManager();
+        
+        // 初始化设备管理器
+        uiManager.showLoading('正在检测设备...', '扫描可用设备');
+        await this.initDeviceManager();
+        
+        // 初始化缓存管理器
+        uiManager.showLoading('正在初始化缓存...', '连接本地存储');
+        await this.initCacheManager();
+        
+        // 初始化错误处理系统
+        uiManager.showLoading('正在初始化错误处理...', '设置错误恢复机制');
+        await this.initErrorHandling();
+        
+        // 预加载模型
+        uiManager.showLoading('正在预加载模型...', '下载AI模型文件');
+        await this.preloadModels();
+        
+        // 创建姿态估计器
+        uiManager.showLoading('正在创建姿态估计器...', '初始化AI引擎');
+        this.createPoseEstimator();
+        
+        // 初始化分析器
+        uiManager.showLoading('正在初始化分析器...', '设置生物力学和轨迹分析');
+        await this.initAnalyzers();
+        
+        // 初始化性能仪表板
+        uiManager.showLoading('正在初始化性能监控...', '设置实时监控面板');
+        await this.initPerformanceDashboard();
+        
+        // 初始化AI优化器
+        uiManager.showLoading('正在初始化AI优化...', '设置智能优化系统');
+        await this.initAIOptimizer();
+        
+        // 初始化数据导出器
+        uiManager.showLoading('正在初始化数据导出...', '设置数据导出功能');
+        await this.initDataExporter();
+        
+        // 初始化UI
+        this.initUI();
+        
+        // 启动姿态估计器
+        uiManager.showLoading('正在启动摄像头...', '获取视频流');
+        await this.poseEstimator.start();
+        
+        // 隐藏加载状态
+        uiManager.hideLoading();
+        
+        // 隐藏HTML加载屏幕并显示主应用
+        const loadingScreen = document.getElementById('loading-screen');
+        const appElement = document.getElementById('app');
+        
+        if (loadingScreen) {
+            loadingScreen.style.display = 'none';
+            console.log('📱 隐藏HTML加载屏幕');
+        }
+        
+        if (appElement) {
+            appElement.style.display = 'flex';
+            console.log('📱 显示主应用界面');
+        }
+        
+        uiManager.showSuccess('姿态估计器启动成功！');
     }
     
     /**
@@ -212,7 +242,7 @@ class PoseEstimationApp {
     async initConfigManager() {
         try {
             this.configManager = new ConfigManager();
-            await this.configManager.initialize();
+            await this.configManager.init();
             this.logger.info('配置管理器初始化完成');
         } catch (error) {
             this.logger.warn('配置管理器初始化失败，使用默认配置:', error);
@@ -226,7 +256,7 @@ class PoseEstimationApp {
     async initStorageManager() {
         try {
             this.storageManager = new StorageManager();
-            await this.storageManager.initialize();
+            await this.storageManager.init();
             this.logger.info('存储管理器初始化完成');
         } catch (error) {
             this.logger.warn('存储管理器初始化失败:', error);
@@ -240,7 +270,7 @@ class PoseEstimationApp {
     async initDeviceManager() {
         try {
             this.deviceManager = new DeviceManager();
-            await this.deviceManager.initialize();
+            await this.deviceManager.init();
             this.logger.info('设备管理器初始化完成');
         } catch (error) {
             this.logger.warn('设备管理器初始化失败:', error);
@@ -271,14 +301,14 @@ class PoseEstimationApp {
                 eventBus: this.eventBus,
                 logger: this.logger
             });
-            await this.errorRecovery.initialize();
+            await this.errorRecovery.init();
             
             // 初始化用户错误处理器
             this.userErrorHandler = new UserErrorHandler({
                 eventBus: this.eventBus,
                 uiManager: uiManager
             });
-            await this.userErrorHandler.initialize();
+            await this.userErrorHandler.init();
             
             this.logger.info('错误处理系统初始化完成');
         } catch (error) {
@@ -316,16 +346,16 @@ class PoseEstimationApp {
             // 初始化生物力学分析器
             this.biomechanicsAnalyzer = new BiomechanicsAnalyzer({
                 eventBus: this.eventBus,
-                config: this.configManager?.getConfig('biomechanics') || {}
+                config: this.configManager?.get('analysis.biomechanics') || {}
             });
-            await this.biomechanicsAnalyzer.initialize();
+            await this.biomechanicsAnalyzer.init();
             
             // 初始化轨迹分析器
             this.trajectoryAnalyzer = new TrajectoryAnalyzer({
                 eventBus: this.eventBus,
-                config: this.configManager?.getConfig('trajectory') || {}
+                config: this.configManager?.get('analysis.trajectory') || {}
             });
-            await this.trajectoryAnalyzer.initialize();
+            await this.trajectoryAnalyzer.init();
             
             this.logger.info('分析器初始化完成');
         } catch (error) {
@@ -339,11 +369,13 @@ class PoseEstimationApp {
      */
     async initPerformanceDashboard() {
         try {
-            this.performanceDashboard = new PerformanceDashboard({
-                container: document.getElementById('performance-chart'),
+            this.performanceDashboard = new PerformanceDashboard(
+            document.getElementById('performance-chart'),
+            {
                 eventBus: this.eventBus
-            });
-            await this.performanceDashboard.initialize();
+            }
+        );
+            // PerformanceDashboard在构造函数中自动初始化
             this.logger.info('性能仪表板初始化完成');
         } catch (error) {
             this.logger.warn('性能仪表板初始化失败:', error);
@@ -377,7 +409,7 @@ class PoseEstimationApp {
                 eventBus: this.eventBus,
                 storageManager: this.storageManager
             });
-            await this.dataExporter.initialize();
+            await this.dataExporter.init();
             this.logger.info('数据导出器初始化完成');
         } catch (error) {
             this.logger.warn('数据导出器初始化失败:', error);

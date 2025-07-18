@@ -1048,7 +1048,9 @@ class TrajectoryPredictor {
  * 运动轨迹分析器主类
  */
 export class TrajectoryAnalyzer {
-  constructor(config = {}) {
+  constructor(options = {}) {
+    this.options = options;
+    this.eventBus = options.eventBus;
     this.config = {
       maxTrajectories: 50,
       maxPointsPerTrajectory: 1000,
@@ -1057,7 +1059,7 @@ export class TrajectoryAnalyzer {
       analysisInterval: 100, // ms
       enablePrediction: true,
       enablePatternRecognition: true,
-      ...config
+      ...(options.config || {})
     };
     
     this.trajectories = new Map(); // keypoint -> Trajectory
@@ -1083,8 +1085,11 @@ export class TrajectoryAnalyzer {
     };
   }
 
-  initialize() {
+  async initialize() {
     console.log('轨迹分析器已初始化');
+    if (this.eventBus) {
+      this.eventBus.emit('analyzer:initialized', { name: 'TrajectoryAnalyzer' });
+    }
     this.emit('initialized', { timestamp: Date.now() });
   }
 

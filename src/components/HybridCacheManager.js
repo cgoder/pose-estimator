@@ -203,15 +203,24 @@ export class HybridCacheManager {
     }
 
     /**
-     * 预加载模型
+     * 预加载模型（带超时机制）
      */
-    async preloadModel(modelType, modelUrl, createModelFn) {
+    async preloadModel(modelType, modelUrl, createModelFn, timeout = 30000) {
         try {
             console.log(`🔄 预加载模型: ${modelType}`);
-            await this.getOrCreateModel(modelType, modelUrl, createModelFn);
+            
+            // 添加超时机制
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error(`模型预加载超时: ${modelType}`)), timeout);
+            });
+            
+            const loadPromise = this.getOrCreateModel(modelType, modelUrl, createModelFn);
+            
+            await Promise.race([loadPromise, timeoutPromise]);
             console.log(`✅ 模型预加载完成: ${modelType}`);
         } catch (error) {
             console.warn(`⚠️ 模型预加载失败: ${modelType}`, error);
+            // 不抛出错误，允许应用继续初始化
         }
     }
 

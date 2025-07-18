@@ -212,6 +212,28 @@ export class DeviceManager {
     }
     
     /**
+     * 获取媒体流（别名方法）
+     * @param {Object} constraints - 媒体约束
+     * @returns {Promise<MediaStream>} 媒体流
+     */
+    async getMediaStream(constraints = null) {
+        const result = await this.getUserMedia(constraints);
+        return result.stream;
+    }
+
+    /**
+     * 停止媒体流
+     * @param {MediaStream} stream - 媒体流
+     */
+    stopMediaStream(stream) {
+        if (stream) {
+            stream.getTracks().forEach(track => {
+                track.stop();
+            });
+        }
+    }
+
+    /**
      * 获取用户媒体流
      * @param {Object} constraints - 媒体约束
      * @returns {Promise<MediaStream>} 媒体流

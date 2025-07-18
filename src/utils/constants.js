@@ -181,11 +181,31 @@ export const KEYPOINT_NAMES = [
 // 浏览器兼容性检查
 export const BROWSER_SUPPORT = {
     checkWebGL: () => {
+        let canvas = null;
+        let gl = null;
+        
         try {
-            const canvas = document.createElement('canvas');
-            return !!(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
+            canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            gl = canvas.getContext('webgl', { preserveDrawingBuffer: false }) || 
+                 canvas.getContext('experimental-webgl', { preserveDrawingBuffer: false });
+            return !!gl;
         } catch (e) {
             return false;
+        } finally {
+            // 清理WebGL上下文
+            if (gl) {
+                const loseContext = gl.getExtension('WEBGL_lose_context');
+                if (loseContext) {
+                    loseContext.loseContext();
+                }
+            }
+            if (canvas) {
+                canvas.width = 1;
+                canvas.height = 1;
+                canvas = null;
+            }
         }
     },
     

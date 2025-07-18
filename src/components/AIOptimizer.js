@@ -4,7 +4,7 @@
  * 实现智能参数调整和性能预测
  */
 
-import { PerformanceMonitor } from '../utils/PerformanceMonitor.js';
+import { PerformanceMonitor } from '../utils/performance.js';
 import { SystemOptimizer } from '../utils/SystemOptimizer.js';
 
 // 优化策略类型

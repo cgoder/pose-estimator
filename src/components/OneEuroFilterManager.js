@@ -1,4 +1,5 @@
 import { CONFIG, KEYPOINT_NAMES } from '../utils/constants.js';
+import { OneEuroFilter } from '../filters/OneEuroFilter.js';
 
 /**
  * One Euro Filter 管理器

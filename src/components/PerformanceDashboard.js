@@ -1529,8 +1529,5 @@ export default PerformanceDashboard;
 export {
     PerformanceMetric,
     PerformanceAlert,
-    ChartComponent,
-    MetricType,
-    AlertLevel,
-    ChartType
+    ChartComponent
 };

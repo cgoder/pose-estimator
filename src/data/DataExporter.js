@@ -62,7 +62,7 @@ export class DataExporter {
         
         // 工具实例
         this.logger = new Logger({ prefix: 'DataExporter' });
-        this.eventBus = EventBus.getInstance();
+        this.eventBus = options.eventBus || new EventBus();
         
         // 格式处理器
         this.formatHandlers = new Map();

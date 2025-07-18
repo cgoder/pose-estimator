@@ -83,7 +83,7 @@ export class DataCollector {
         
         // 工具实例
         this.logger = new Logger({ prefix: 'DataCollector' });
-        this.eventBus = EventBus.getInstance();
+        this.eventBus = options.eventBus || new EventBus();
         this.storageManager = new StorageManager();
         
         // 定时器

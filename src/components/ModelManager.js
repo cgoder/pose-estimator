@@ -246,6 +246,9 @@ class DeviceProfiler {
      * 检测GPU支持
      */
     async _checkGPUSupport() {
+        let canvas = null;
+        let gl = null;
+        
         try {
             const backends = tf.getBackend();
             const gpuBackend = 'webgl';
@@ -255,13 +258,16 @@ class DeviceProfiler {
             const isWebGLSupported = tf.getBackend() === gpuBackend;
             
             // 检测WebGL版本和特性
-            const canvas = document.createElement('canvas');
-            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+            canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            gl = canvas.getContext('webgl2', { preserveDrawingBuffer: false }) || 
+                 canvas.getContext('webgl', { preserveDrawingBuffer: false });
             
             const gpuInfo = {
                 supported: isWebGLSupported,
                 backend: tf.getBackend(),
-                webglVersion: gl ? (canvas.getContext('webgl2') ? 2 : 1) : 0,
+                webglVersion: gl ? (gl.constructor.name === 'WebGL2RenderingContext' ? 2 : 1) : 0,
                 maxTextureSize: gl ? gl.getParameter(gl.MAX_TEXTURE_SIZE) : 0,
                 maxRenderbufferSize: gl ? gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) : 0,
                 vendor: gl ? gl.getParameter(gl.VENDOR) : 'unknown',
@@ -276,6 +282,19 @@ class DeviceProfiler {
                 backend: 'cpu',
                 error: error.message
             };
+        } finally {
+            // 清理WebGL上下文和canvas
+            if (gl) {
+                const loseContext = gl.getExtension('WEBGL_lose_context');
+                if (loseContext) {
+                    loseContext.loseContext();
+                }
+            }
+            if (canvas) {
+                canvas.width = 1;
+                canvas.height = 1;
+                canvas = null;
+            }
         }
     }
     
@@ -1118,26 +1137,40 @@ class ModelManager {
      * 加载MoveNet模型
      */
     async _loadMoveNetModel(config) {
-        // 这里需要根据实际的MoveNet加载方式实现
-        // 示例代码
-        const modelUrl = config.modelUrl || 'https://tfhub.dev/google/movenet/singlepose/lightning/4';
-        return await tf.loadLayersModel(modelUrl);
+        try {
+            const poseDetection = await import('@tensorflow-models/pose-detection');
+            return await poseDetection.createDetector(
+                poseDetection.SupportedModels.MoveNet,
+                {
+                    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+                }
+            );
+        } catch (error) {
+            console.error('MoveNet模型加载失败:', error);
+            throw error;
+        }
     }
     
     /**
      * 加载PoseNet模型
      */
     async _loadPoseNetModel(config) {
-        // 这里需要根据实际的PoseNet加载方式实现
-        // 示例代码
-        const { PoseNet } = await import('@tensorflow-models/posenet');
-        return await PoseNet.load({
-            architecture: 'MobileNetV1',
-            outputStride: config.outputStride,
-            inputResolution: config.inputResolution,
-            multiplier: config.multiplier,
-            quantBytes: config.quantBytes
-        });
+        try {
+            const poseDetection = await import('@tensorflow-models/pose-detection');
+            return await poseDetection.createDetector(
+                poseDetection.SupportedModels.PoseNet,
+                {
+                    quantBytes: config.quantBytes || 2,
+                    architecture: config.architecture || 'MobileNetV1',
+                    outputStride: config.outputStride || 16,
+                    inputResolution: config.inputResolution || { width: 353, height: 257 },
+                    multiplier: config.multiplier || 0.75
+                }
+            );
+        } catch (error) {
+            console.error('PoseNet模型加载失败:', error);
+            throw error;
+        }
     }
     
     /**

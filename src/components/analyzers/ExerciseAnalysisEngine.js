@@ -500,6 +500,13 @@ class ExerciseAnalysisEngine {
     }
     
     /**
+     * 获取引擎状态信息
+     */
+    getStatus() {
+        return this.getStats();
+    }
+    
+    /**
      * 获取引擎统计信息
      */
     getStats() {

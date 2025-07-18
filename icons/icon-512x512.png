@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#f0f0f0" rx="50"/>
+  <circle cx="256" cy="128" r="48" fill="#4CAF50"/>
+  <rect x="224" y="192" width="64" height="128" fill="#4CAF50" rx="12"/>
+  <rect x="160" y="224" width="64" height="32" fill="#4CAF50" rx="16"/>
+  <rect x="288" y="224" width="64" height="32" fill="#4CAF50" rx="16"/>
+  <rect x="192" y="320" width="48" height="128" fill="#4CAF50" rx="12"/>
+  <rect x="272" y="320" width="48" height="128" fill="#4CAF50" rx="12"/>
+  <text x="256" y="480" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" fill="#666">Pose Estimator</text>
+</svg>

@@ -178,7 +178,7 @@ export class PoseEstimator {
      */
     async initUtilityModules() {
         // 事件总线
-        this.eventBus = EventBus.getInstance();
+        this.eventBus = this.options.eventBus || new EventBus();
         
         // 日志记录器
         this.logger = new Logger({ 

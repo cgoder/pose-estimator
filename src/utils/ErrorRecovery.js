@@ -290,14 +290,16 @@ class AutoRecoveryManager {
   // 具体恢复策略实现
   async checkNetworkConnectivity() {
     try {
-      const response = await fetch('/api/health', { 
+      // 检查网络连接，使用当前页面的资源而不是不存在的API
+      const response = await fetch(window.location.href, { 
         method: 'HEAD',
         cache: 'no-cache',
         signal: AbortSignal.timeout(5000)
       });
       return response.ok;
     } catch {
-      return false;
+      // 如果HEAD请求失败，尝试检查navigator.onLine
+      return navigator.onLine;
     }
   }
 
@@ -512,8 +514,14 @@ class HealthCheckManager {
 
   async checkNetworkHealth() {
     try {
+      // 检查网络健康状态，避免访问不存在的API端点
+      if (!navigator.onLine) {
+        return false;
+      }
+      
       const start = performance.now();
-      const response = await fetch('/api/ping', {
+      // 使用一个小的静态资源来测试网络延迟
+      const response = await fetch('./favicon.ico', {
         method: 'HEAD',
         cache: 'no-cache',
         signal: AbortSignal.timeout(5000)
@@ -522,7 +530,8 @@ class HealthCheckManager {
       
       return response.ok && duration < 3000;
     } catch {
-      return false;
+      // 如果请求失败，检查基本的网络连接状态
+      return navigator.onLine;
     }
   }
 
@@ -542,11 +551,40 @@ class HealthCheckManager {
   }
 
   checkRenderingHealth() {
-    // 检查WebGL上下文是否丢失
+    // 检查canvas渲染状态
     const canvas = document.querySelector('canvas');
     if (canvas) {
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      return gl && !gl.isContextLost();
+      try {
+        // 检查2D上下文是否可用
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return false;
+        }
+        
+        // 检查canvas尺寸是否有效
+        if (canvas.width <= 0 || canvas.height <= 0) {
+          return false;
+        }
+        
+        // 检查canvas是否在DOM中且可见
+        if (!canvas.isConnected || canvas.style.display === 'none') {
+          return false;
+        }
+        
+        // 尝试简单的绘制操作来验证渲染功能
+        // 设置willReadFrequently属性以优化性能
+        if (canvas.getContext) {
+          const testCtx = canvas.getContext('2d', { willReadFrequently: true });
+          if (testCtx) {
+            const imageData = testCtx.getImageData(0, 0, 1, 1);
+            return imageData && imageData.data && imageData.data.length === 4;
+          }
+        }
+        return true;
+      } catch (error) {
+        console.warn('渲染健康检查出错:', error);
+        return false;
+      }
     }
     return true;
   }

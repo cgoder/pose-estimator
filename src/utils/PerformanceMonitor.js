@@ -422,15 +422,36 @@ export class PerformanceMonitor {
         
         // 如果有WebGL上下文，可以获取一些GPU信息
         if (typeof WebGLRenderingContext !== 'undefined') {
-            const canvas = document.createElement('canvas');
-            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            let canvas = null;
+            let gl = null;
             
-            if (gl) {
-                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                if (debugInfo) {
-                    // 这里可以获取GPU信息，但使用率仍然难以准确测量
-                    // 作为示例，我们使用一个模拟值
-                    gpu.current = Math.random() * 50; // 模拟GPU使用率
+            try {
+                canvas = document.createElement('canvas');
+                canvas.width = 1;
+                canvas.height = 1;
+                gl = canvas.getContext('webgl', { preserveDrawingBuffer: false }) || 
+                     canvas.getContext('experimental-webgl', { preserveDrawingBuffer: false });
+                
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        // 这里可以获取GPU信息，但使用率仍然难以准确测量
+                        // 作为示例，我们使用一个模拟值
+                        gpu.current = Math.random() * 50; // 模拟GPU使用率
+                    }
+                }
+            } finally {
+                // 清理WebGL上下文
+                if (gl) {
+                    const loseContext = gl.getExtension('WEBGL_lose_context');
+                    if (loseContext) {
+                        loseContext.loseContext();
+                    }
+                }
+                if (canvas) {
+                    canvas.width = 1;
+                    canvas.height = 1;
+                    canvas = null;
                 }
             }
         }

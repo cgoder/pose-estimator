@@ -129,6 +129,20 @@ export class PerformanceMonitor {
     }
     
     /**
+     * 获取当前性能指标
+     * @returns {Object} 当前性能指标对象
+     */
+    getCurrentMetrics() {
+        this.updateMemoryUsage();
+        
+        return {
+            ...this.metrics,
+            frameDropRate: this.metrics.totalFrames > 0 ? 
+                (this.metrics.droppedFrames / this.metrics.totalFrames * 100).toFixed(1) : 0
+        };
+    }
+    
+    /**
      * 获取性能报告
      * @returns {Object} 性能指标对象
      */

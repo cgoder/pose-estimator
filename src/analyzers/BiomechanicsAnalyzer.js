@@ -95,7 +95,7 @@ export class BiomechanicsAnalyzer {
         // 工具实例
         this.logger = new Logger({ prefix: 'BiomechanicsAnalyzer' });
         this.performanceMonitor = new PerformanceMonitor();
-        this.eventBus = EventBus.getInstance();
+        this.eventBus = options.eventBus || new EventBus();
         
         // 缓存
         this.cache = new Map();
